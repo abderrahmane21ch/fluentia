@@ -9,12 +9,12 @@ FL.pages.book = {
   render(params, query) {
     const { icon } = FL.ui;
     return `
-    <section class="page-head" style="padding-bottom:20px"><div class="container">
-      <div class="eyebrow">${icon('calendar')} Booking</div>
-      <h1 id="book-title">${query.reschedule ? 'Reschedule your lesson' : 'Book a lesson'}</h1>
-      <p>Live availability, shown in your own timezone. Free cancellation up to ${FL.config.booking.cancelHours} hours before.</p>
+    <section class="page-head"><div class="container">
+      <div class="crumbs"><a href="#/">Home</a><span>/</span><span>Live lessons</span></div>
+      <h1 id="book-title">${query.reschedule ? 'Reschedule your lesson' : 'Book a live lesson'}</h1>
+      <p>1-on-1 video lessons with ${FL.ui.esc(FL.config.teacher.name)}. Times are shown in your own timezone, and you can cancel free of charge up to ${FL.config.booking.cancelHours} hours before.</p>
     </div></section>
-    <section class="section" style="padding-top:0"><div class="container book-layout" id="book"></div></section>`;
+    <section class="section-tight"><div class="container book-layout" id="book"></div></section>`;
   },
   mount(root, params, query) {
     const { icon, esc } = FL.ui;
@@ -33,7 +33,7 @@ FL.pages.book = {
     const trialUsed = d ? d.trialUsed : false;
     const state = {
       type: reschedule ? reschedule.type : (pending && pending.type) || (query.type && cfg.lessonTypes.some(t => t.id === query.type) ? query.type : 'standard'),
-      course: reschedule ? (reschedule.courseId || '') : (pending && pending.course) || (query.course && FL.data.courses.some(c => c.id === query.course) ? query.course : (d && d.profile.activeCourse) || ''),
+      course: reschedule ? (reschedule.topic || '') : (pending && pending.course) || (query.topic && FL.config.topics.includes(query.topic) ? query.topic : (d && d.profile.lang === 'fr' ? 'General French' : 'General English')),
       note: reschedule ? reschedule.note : (pending && pending.note) || '',
       day: null, start: (pending && pending.start) || null, slots: []
     };
@@ -61,11 +61,9 @@ FL.pages.book = {
           </div>
           <div class="card">
             <div class="step-title"><span class="num">2</span><h3>What would you like to focus on?</h3></div>
-            <div class="grid grid-2" style="gap:14px">
-              <div class="field mb-0"><label for="b-course">Course</label>
-                <select id="b-course" class="select"><option value="">General / not sure yet</option>
-                  <optgroup label="English">${FL.data.courses.filter(c => c.lang === 'en').map(c => `<option value="${c.id}">${esc(c.title)}</option>`).join('')}</optgroup>
-                  <optgroup label="French">${FL.data.courses.filter(c => c.lang === 'fr').map(c => `<option value="${c.id}">${esc(c.title)}</option>`).join('')}</optgroup>
+            <div class="grid g-2" style="gap:14px">
+              <div class="field mb-0"><label for="b-course">Topic</label>
+                <select id="b-course" class="select">${FL.config.topics.map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join('')}
                 </select></div>
               <div class="field mb-0"><label for="b-note">Notes for your teacher <span class="muted">(optional)</span></label>
                 <textarea id="b-note" class="textarea" style="min-height:46px" maxlength="500" placeholder="e.g. Job interview next week, I want to practise answers"></textarea></div>
@@ -80,7 +78,7 @@ FL.pages.book = {
             <div id="slots" class="mt-1"></div>
           </div>
         </div>
-        <aside class="sticky-card"><div class="card" id="summary"></div></aside>`;
+        <aside class="sticky"><div class="card" id="summary"></div></aside>`;
       el.querySelector('#b-course').value = state.course;
       el.querySelector('#b-note').value = state.note;
       const sel = el.querySelector('#b-tz');
@@ -106,7 +104,7 @@ FL.pages.book = {
       el.querySelector('#types').innerHTML = cfg.lessonTypes.map(t => {
         const disabled = (reschedule && t.id !== reschedule.type) || (t.once && trialUsed && !reschedule);
         return `<button class="type-card" role="radio" aria-checked="${state.type === t.id}" data-type="${t.id}" ${disabled ? 'disabled' : ''}>
-          <div class="t-head"><strong>${esc(t.name)}</strong>${t.credits === 0 ? '<span class="badge badge-success">Free</span>' : `<span class="badge badge-primary">${FL.util.plural(t.credits, 'credit')}</span>`}</div>
+          <div class="row between"><strong>${esc(t.name)}</strong>${t.credits === 0 ? '<span class="tag good">Free</span>' : `<span class="tag brand">${FL.util.plural(t.credits, 'credit')}</span>`}</div>
           <span class="small" style="font-weight:600">${icon('clock', '')} ${t.minutes} minutes</span>
           <small>${t.once && trialUsed && !reschedule ? 'You’ve already used your free trial.' : esc(t.desc)}</small></button>`;
       }).join('');
@@ -149,7 +147,6 @@ FL.pages.book = {
       const t = FL.schedule.lessonType(state.type);
       const u = FL.auth.current();
       const dd = u ? FL.db.load() : null;
-      const course = FL.data.courses.find(c => c.id === state.course);
       const cost = reschedule ? 0 : t.credits;
       const s = state.start;
       const short = u && dd.credits < cost;
@@ -157,7 +154,7 @@ FL.pages.book = {
         <div class="row mb-2"><span class="avatar" style="width:46px;height:46px"><img src="${esc(cfg.teacher.photo)}" alt=""></span>
           <div><strong>${esc(cfg.teacher.name)}</strong><div class="tiny muted">${esc(cfg.teacher.title)}</div></div></div>
         <div class="summary-row"><span>Lesson</span><span>${esc(t.name)} · ${t.minutes} min</span></div>
-        <div class="summary-row"><span>Focus</span><span>${course ? esc(course.title) : 'General'}</span></div>
+        <div class="summary-row"><span>Focus</span><span>${esc(state.course || 'General')}</span></div>
         <div class="summary-row"><span>Date</span><span>${s ? FL.time.fmtDateLong(s, tz()) : '—'}</span></div>
         <div class="summary-row"><span>Your time</span><span>${s ? `${FL.time.fmtTime(s, tz())} – ${FL.time.fmtTime(s + t.minutes * 60000, tz())}` : '—'}</span></div>
         ${s && tz() !== cfg.teacher.timezone ? `<div class="summary-row"><span>Teacher’s time</span><span>${FL.time.fmtTime(s, cfg.teacher.timezone)} (${esc(cfg.teacher.timezone.split('/').pop().replace(/_/g, ' '))})</span></div>` : ''}
@@ -200,13 +197,13 @@ FL.pages.book = {
         FL.router.go('/register?next=' + encodeURIComponent('/book'));
         return;
       }
-      const res = FL.schedule.book({ start: state.start, typeId: state.type, courseId: state.course, note: state.note, rescheduleId: reschedule ? reschedule.id : null });
+      const res = FL.schedule.book({ start: state.start, typeId: state.type, topic: state.course, note: state.note, rescheduleId: reschedule ? reschedule.id : null });
       if (!res.ok) {
         if (res.error === 'not-enough-credits') {
           FL.ui.modal({
             title: 'You need more credits',
             body: `<p>This lesson costs ${FL.util.plural(FL.schedule.lessonType(state.type).credits, 'credit')} and you need ${FL.util.plural(res.need, 'more credit')}.</p><div class="notice">${icon('sparkles')}<div>Tip: the 10-lesson pack saves you 15%.</div></div>`,
-            actions: [{ label: 'Not now', className: 'btn-ghost' }, { label: 'See packages', className: 'btn-primary', onClick() { try { sessionStorage.setItem('fluentia.pendingBooking', JSON.stringify({ type: state.type, course: state.course, note: state.note, start: state.start })); } catch (e) { /* ignore */ } FL.router.go('/pricing'); } }]
+            actions: [{ label: 'Not now', className: 'btn-quiet' }, { label: 'See packages', className: 'btn-primary', onClick() { try { sessionStorage.setItem('fluentia.pendingBooking', JSON.stringify({ type: state.type, course: state.course, note: state.note, start: state.start })); } catch (e) { /* ignore */ } FL.router.go('/pricing'); } }]
           });
         } else {
           FL.ui.toast(res.error, 'error');
@@ -224,12 +221,12 @@ FL.pages.book = {
         body: `
           <div class="notice ok mb-2">${icon('check-circle')}<div><strong>${esc(t.name)}</strong> on <strong>${FL.time.fmtDateLong(b.start)}</strong> at <strong>${FL.time.fmtTime(b.start)}</strong> (${esc(tz().replace(/_/g, ' '))}).</div></div>
           <p class="small muted">Add it to your calendar so you get a reminder. You can join the call and open your virtual classroom from your dashboard.</p>
-          <div class="row row-wrap">
+          <div class="row wrap">
             <button class="btn btn-sm" data-ics>${icon('download')} Apple / Outlook (.ics)</button>
             <a class="btn btn-sm" href="${esc(FL.cal.google(b))}" target="_blank" rel="noopener">${icon('external')} Google Calendar</a>
           </div>`,
         actions: [
-          { label: 'Open classroom', className: 'btn-ghost', onClick() { FL.router.go('/classroom/' + b.id); } },
+          { label: 'Open classroom', className: 'btn-quiet', onClick() { FL.router.go('/classroom/' + b.id); } },
           { label: 'Go to dashboard', className: 'btn-primary', onClick() { FL.router.go('/dashboard'); } }
         ],
         onMount({ el: m }) { m.querySelector('[data-ics]').addEventListener('click', () => FL.ui.download(`lesson-${FL.time.dayKey(b.start)}.ics`, FL.cal.ics(b), 'text/calendar')); },

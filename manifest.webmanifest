@@ -1,9 +1,9 @@
 {
-  "name": "Fluentia — English & French lessons",
+  "name": "Fluentia — English & French courses",
   "short_name": "Fluentia",
   "start_url": "./",
   "display": "standalone",
-  "background_color": "#faf8f5",
-  "theme_color": "#4f46e5",
+  "background_color": "#ffffff",
+  "theme_color": "#1f3a68",
   "icons": [{ "src": "assets/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
 }

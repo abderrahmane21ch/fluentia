@@ -1,65 +1,80 @@
-# Fluentia — English & French lessons platform
+# Fluentia — English & French courses
 
-A complete online-teaching platform for **Abderrahmane Amar Chaouch**, an online English & French teacher based in Kuala Lumpur.
-Students can find their level, book 1-on-1 lessons in their own timezone, join a virtual classroom and keep practising between lessons.
+An online language school built for **Abderrahmane Amar Chaouch**, an English and French teacher based in Kuala Lumpur.
+It works like a small Moodle: structured courses by CEFR level, lessons with slides and exercises, grades, level tests and certificates. Live 1-on-1 lessons can be booked on top.
 
-Built from scratch with **HTML, CSS and vanilla JavaScript**: no frameworks, no build step, no dependencies.
+Built from scratch with **HTML, CSS and vanilla JavaScript**: no framework, no build step, no dependencies.
 
-## Features
+**Live site:** https://abderrahmane21ch.github.io/fluentia/
 
-| Area | What it does |
+## What's inside
+
+| | |
 |---|---|
-| **Adaptive placement test** | 10 questions that get harder or easier as you answer (A1 → C1). Shows a breakdown by level, recommends courses and creates a downloadable PNG certificate. English & French. |
-| **Timezone-smart booking** | Teacher availability is set in Malaysia time and shown in each student's local time. Includes minimum notice, a free trial lesson, a credit system, **.ics / Google Calendar export**, rescheduling, and cancellation with a 24-hour refund rule. |
-| **Virtual classroom** | A whiteboard (pen, highlighter, text, eraser, undo, PNG export), autosaving lesson notes, a lesson timer, and vocabulary capture that turns new words into flashcards. Try it at `#/classroom/demo`. |
-| **Spaced-repetition flashcards** | The SM-2 algorithm with Again / Hard / Good / Easy buttons, 4 built-in decks plus a personal "My words" deck, text-to-speech, and keyboard shortcuts. |
-| **Pronunciation coach** | Native-speed and slow audio (Web Speech API), speech recognition, word-by-word scoring with highlights, and a best score saved for each phrase. |
-| **Daily challenge** | 5 questions a day, the same for everyone on a given day, one attempt per day per language, with a countdown to the next challenge. |
-| **Dashboard** | Upcoming lessons with a join button, a personal weekly learning plan (from an onboarding wizard), homework, a weekly-goal ring, a skills radar chart, a 17-week activity heatmap, badges, XP levels and streaks. |
-| **Pricing** | Plans with a currency switcher (MYR / USD / EUR / GBP) and a demo checkout that adds lesson credits. |
-| **Accounts** | Register and sign in (salted SHA-256 hashes), password strength meter, settings, data export (JSON), progress reset and account deletion. Guest progress carries over when you sign up. |
-| **Polish** | Dark mode, a ⌘/Ctrl + K command palette, responsive layout, accessible dialogs (focus trap, Esc), toasts, and scroll-reveal animations. |
+| **Courses** | English and French, levels **A1, A2, B1 and B2**, with 5 lessons per level: **40 lessons**, **198 slides**, **352 exercises** and **320 vocabulary words**. French is explained in English. |
+| **Lesson player** | Each lesson goes **Slides → Practice → Summary**. Slides can be moved with the arrow keys or by swiping on a phone, and shown full screen. Every example, dialogue and word has audio. There are also personal notes for each lesson. |
+| **Exercises** | Five types: multiple choice, gap fill, matching, sentence building and dictation. Feedback and explanations appear instantly, and the checking is lenient with accents and punctuation. **Retry mistakes** repeats only the questions you got wrong. A score of 60% or more completes the lesson. |
+| **Level pages** | Each level page has three tabs: **Lessons** (with completion status), **Glossary** (searchable, with audio) and **Grades** (attempts and best score for every activity). |
+| **Level tests** | 15 questions drawn from the whole level. Passing with 70% or more unlocks a downloadable certificate. |
+| **Placement test** | 10 adaptive questions that estimate your CEFR level and recommend the course to start with. |
+| **Review** | Vocabulary from every lesson you open is reviewed on a spaced-repetition schedule (SM-2), so each word comes back just before you'd forget it. There is a "My words" deck for your own words, and speaking practice scores you word by word using speech recognition. |
+| **My learning** | A dashboard with **Continue where you left off**, course progress, a weekly goal, a streak, an activity calendar and a to-do list. |
+| **Live lessons** | Booking shows times in your own timezone. It handles lesson credits (in US dollars), rescheduling and cancellation, calendar export (.ics or Google Calendar), and a classroom page with a whiteboard, notes and vocabulary. |
+| **Quality** | Responsive from 320px up, light and dark themes, keyboard support, accessible dialogs, and a `Ctrl/⌘ + K` search across all lessons. |
 
-**One-click demo:** on the Sign in page, choose **"Explore with a demo student account"** to see a fully populated dashboard.
+**Try it in one click:** on **Sign in**, choose **"Explore with a demo student account"**.
 
-## Run it
+## Run locally
 
-Open `index.html` in a browser. It works straight from the file system.
-For the microphone (pronunciation scoring), serve it over `http://localhost` or HTTPS, for example:
+Open `index.html` in a browser. For the microphone features, serve the folder over `http://localhost`:
 
 ```bash
 python3 -m http.server 8000
 ```
 
-## Deploy (free)
+## Adding or editing lessons
 
-- **GitHub Pages:** push this folder to a repository → Settings → Pages → deploy from the `main` branch.
-- **Netlify / Vercel:** drag and drop the folder; there is no build command.
+Lessons live in `assets/js/content/<language>-<level>.js`. Each lesson has this shape:
+
+```js
+{
+  title: 'My family', focus: 'Possessive adjectives · have got', minutes: 20,
+  goals: ['…'],
+  slides: [ { t: 'table', title, head: [...], rows: [[...]] }, { t: 'text', title, body: ['…'] },
+            { t: 'dialogue', title, lines: [[speaker, line, translation?]] }, { t: 'examples', title, items: [[sentence, note]] },
+            { t: 'vocab', title, words: [[term, meaning]] }, { t: 'mistakes', title, items: [[wrong, right, why]] } ],
+  vocab: [[term, meaning], …],
+  practice: [ ['choice', question, [correct, ...wrong], explanation],
+              ['gap', 'Text with ___', ['answer', 'alternative'], explanation],
+              ['match', instruction, [[left, right], …]],
+              ['order', 'Sentence to rebuild.', 'translation (optional)'],
+              ['listen', 'Sentence to dictate.'] ],
+  summary: ['…']
+}
+```
+
+Text supports `**bold**`, `*italic*` and `~~strikethrough~~`. A cover slide, a key-vocabulary slide and a summary slide are added automatically.
 
 ## Customise
 
-All teacher details, availability, prices, lesson types and booking rules live in **`assets/js/config.js`**.
-Learning content (courses, test questions, flashcards, phrases, FAQ, badges) lives in **`assets/js/data.js`**.
-
-- Set `teacher.meetingLink` to your personal Google Meet or Zoom room.
-- Optionally add `teacher.whatsapp` to show a WhatsApp contact button.
-- Add real student feedback to `testimonials` and a testimonials section appears on the home page.
+`assets/js/config.js` holds the teacher profile, availability, live-lesson prices (USD), lesson topics and booking rules.
 
 ## Project structure
 
 ```
-index.html                 app shell
-assets/css/styles.css      design system (light + dark)
-assets/js/config.js        teacher & business settings
-assets/js/data.js          learning content
-assets/js/core.js          storage, timezones, auth, data, XP/badges, SRS, scheduling, calendar, speech
-assets/js/ui.js            icons, toasts, modals, command palette, certificate, charts
-assets/js/router.js        hash router with auth guards
-assets/js/app.js           header/footer, theme, global shortcuts, routes
-assets/js/pages/*.js       one file per page
+index.html
+assets/css/styles.css          design system (light + dark)
+assets/js/config.js            teacher & business settings
+assets/js/data.js              course registry, placement test, FAQ
+assets/js/content/*.js         the 40 lessons
+assets/js/core.js              storage, time zones, accounts, progress, SRS, booking, speech
+assets/js/ui.js                icons, dialogs, toasts, search, certificates
+assets/js/exercises.js         exercise engine
+assets/js/router.js, app.js    routing and app shell
+assets/js/pages/*.js           one file per page
 ```
 
-## A note on the demo backend
+## About the data
 
-This portfolio version stores accounts, bookings and progress in the browser's `localStorage`.
-In production, the same modules would call an API (for example Node/Express or Firebase), and the checkout would use Stripe or PayPal.
+This portfolio version stores accounts and progress in the browser (`localStorage`), and checkout is a demo.
+In production, the same modules would talk to an API (for example Node/Express or Firebase), with Stripe or PayPal for payments.

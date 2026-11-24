@@ -1,215 +1,168 @@
 /* ==========================================================================
-   Fluentia — Student dashboard + onboarding wizard
+   Fluentia — "My learning" dashboard and onboarding
    ========================================================================== */
 window.FL = window.FL || {};
 FL.pages = FL.pages || {};
 
 FL.pages.dashboard = {
-  title: 'Dashboard',
+  title: 'My learning',
   auth: true,
-  render() { return `<section class="section" style="padding-top:40px"><div class="container" id="dash"></div></section>`; },
+  render() { return `<section class="section-tight"><div class="container" id="dash"></div></section>`; },
   mount(root) {
     const { icon, esc } = FL.ui;
     const el = root.querySelector('#dash');
-    const WD = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     FL.db.processCompletedLessons();
 
-    function skillPct(v) { return Math.min(100, Math.round(100 * Math.log10(1 + v) / Math.log10(201))); }
-
-    function lessonItem(b, mode) {
+    function lessonItem(b, past) {
       const t = FL.schedule.lessonType(b.type);
-      const c = FL.data.courses.find(x => x.id === b.courseId);
       const st = FL.db.bookingStatus(b);
       const now = Date.now();
       const canJoin = now >= b.start - FL.config.booking.joinEarlyMinutes * 60000 && now < b.end;
-      const mon = FL.time.fmt(b.start, { month: 'short' });
-      const day = FL.time.fmt(b.start, { day: 'numeric' });
       return `<div class="lesson-item">
-        <div class="date-tile"><div class="m">${mon}</div><div class="d">${day}</div></div>
-        <div class="li-body">
-          <strong>${esc(t.name)}${c ? ` · ${esc(c.title)}` : ''}</strong>
-          <div class="small muted">${FL.time.fmt(b.start, { weekday: 'long' })}, ${FL.time.fmtTime(b.start)} – ${FL.time.fmtTime(b.end)}
-            ${mode === 'upcoming' ? ` · <span class="${st === 'live' ? '' : ''}">${st === 'live' ? '<span class="badge badge-danger">Live now</span>' : FL.time.relative(b.start)}</span>` : ''}</div>
-          ${b.note && mode === 'upcoming' ? `<div class="tiny muted mt-1">“${esc(b.note)}”</div>` : ''}
-        </div>
-        <div class="li-actions">
-          ${mode === 'upcoming' ? `
-            ${canJoin ? `<a class="btn btn-primary btn-sm" href="${esc(FL.config.teacher.meetingLink)}" target="_blank" rel="noopener">${icon('video')} Join call</a>` : ''}
-            <a class="btn btn-sm ${canJoin ? '' : 'btn-soft'}" href="#/classroom/${b.id}">${icon('pen')} Classroom</a>
-            <button class="icon-btn" data-ics="${b.id}" title="Add to calendar" aria-label="Add to calendar">${icon('download')}</button>
-            ${st === 'upcoming' ? `<button class="icon-btn" data-resched="${b.id}" title="Reschedule" aria-label="Reschedule">${icon('repeat')}</button>
-            <button class="icon-btn" data-cancel="${b.id}" title="Cancel lesson" aria-label="Cancel lesson">${icon('x')}</button>` : ''}`
-          : `<a class="btn btn-sm btn-ghost" href="#/classroom/${b.id}">${icon('book')} Notes</a>`}
-        </div>
-      </div>`;
+        <div class="date-tile"><div class="m">${FL.time.fmt(b.start, { month: 'short' })}</div><div class="d">${FL.time.fmt(b.start, { day: 'numeric' })}</div></div>
+        <div class="li-body"><strong>${esc(t.name)} · ${esc(b.topic || 'General')}</strong>
+          <span class="small muted">${FL.time.fmt(b.start, { weekday: 'long' })}, ${FL.time.fmtTime(b.start)}–${FL.time.fmtTime(b.end)}${past ? '' : ` · ${st === 'live' ? '<span class="tag bad">Live now</span>' : FL.time.relative(b.start)}`}</span></div>
+        <div class="li-actions">${past ? `<a class="btn btn-quiet btn-sm" href="#/classroom/${b.id}">Notes</a>` : `
+          ${canJoin ? `<a class="btn btn-primary btn-sm" href="${esc(FL.config.teacher.meetingLink)}" target="_blank" rel="noopener">${icon('video')} Join</a>` : ''}
+          <a class="btn btn-sm" href="#/classroom/${b.id}">Classroom</a>
+          <button type="button" class="icon-btn sm" data-ics="${b.id}" title="Add to calendar" aria-label="Add to calendar">${icon('download')}</button>
+          ${st === 'upcoming' ? `<button type="button" class="icon-btn sm" data-resched="${b.id}" title="Reschedule" aria-label="Reschedule">${icon('repeat')}</button>
+          <button type="button" class="icon-btn sm" data-cancel="${b.id}" title="Cancel" aria-label="Cancel lesson">${icon('x')}</button>` : ''}`}</div></div>`;
     }
 
     function heatmap(d) {
       const today = FL.time.localKey();
-      const wdToday = (FL.time.weekdayOfKey(today) + 6) % 7; // Mon=0
-      const start = FL.time.addDaysKey(today, -(16 * 7 + wdToday));
-      let cells = '';
+      const wd = (FL.time.weekdayOfKey(today) + 6) % 7;
+      const start = FL.time.addDaysKey(today, -(16 * 7 + wd));
+      let cells = '', active = 0;
       for (let i = 0; i < 17 * 7; i++) {
         const k = FL.time.addDaysKey(start, i);
         const v = d.activity[k] || 0;
-        const l = v === 0 ? 0 : v <= 20 ? 1 : v <= 50 ? 2 : v <= 90 ? 3 : 4;
-        cells += `<i data-l="${l}" class="${k > today ? 'future' : ''}" title="${k}: ${v} XP"></i>`;
+        if (v) active++;
+        const l = v === 0 ? 0 : v <= 3 ? 1 : v <= 8 ? 2 : v <= 15 ? 3 : 4;
+        cells += `<i data-l="${l}" class="${k > today ? 'future' : ''}" title="${k}${v ? '' : ' — no activity'}"></i>`;
       }
-      const activeDays = Object.keys(d.activity).filter(k => k >= start).length;
-      return `<div class="heatmap" role="img" aria-label="Activity over the last 17 weeks: ${activeDays} active days">${cells}</div>
-        <div class="heat-legend">Less <i style="background:var(--surface-3)"></i><i style="background:color-mix(in srgb,var(--primary) 30%,var(--surface-3))"></i><i style="background:color-mix(in srgb,var(--primary) 55%,var(--surface-3))"></i><i style="background:color-mix(in srgb,var(--primary) 78%,var(--surface-3))"></i><i style="background:var(--primary)"></i> More</div>
-        <p class="tiny muted mb-0 mt-1">${activeDays} active days in the last 17 weeks</p>`;
-    }
-
-    function planCard(d) {
-      const plan = d.profile.plan;
-      if (!plan) return `<div class="card"><div class="card-title"><h3>${icon('sparkles')} Your learning plan</h3></div>
-        <p class="muted">Answer 4 quick questions and get a weekly plan built around your goal and schedule.</p>
-        <button class="btn btn-primary" data-onboard>${icon('sparkles')} Create my plan</button></div>`;
-      const todayWd = new Date().getDay();
-      const goal = FL.data.GOALS.find(g => g.id === plan.goal);
-      return `<div class="card">
-        <div class="card-title"><h3>${icon('sparkles')} Your weekly plan</h3><button class="btn btn-ghost btn-sm" data-onboard>${icon('settings')} Adjust</button></div>
-        <div class="row row-wrap mb-2" style="gap:8px">
-          ${FL.views.langBadge(plan.lang)}<span class="chip">${icon('target')} ${esc(goal ? goal.label : plan.goal)}</span>
-          <span class="chip">${icon('video')} ${FL.util.plural(plan.lessonsPerWeek, 'lesson')} / week</span>
-          <span class="chip">${icon('zap')} ${plan.weeklyXp} XP goal</span>
-        </div>
-        <div class="plan-week">${plan.days.map(day => `
-          <div class="plan-day ${day.wd === todayWd ? 'today' : ''}"><span class="pd-name">${WD[day.wd]}</span>
-            ${day.tasks.map(t => `<span class="pd-task" style="${t.k === 'lesson' ? 'background:var(--primary);color:var(--on-primary);font-weight:600' : ''}">${esc(t.t)}</span>`).join('')}</div>`).join('')}
-        </div></div>`;
+      return `<div class="heatmap" role="img" aria-label="${active} active days in the last 17 weeks">${cells}</div><p class="tiny muted mt-1 mb-0">${active} active days in the last 17 weeks</p>`;
     }
 
     function draw() {
       const user = FL.auth.current();
       if (!user) return;
       const d = FL.db.load();
-      const lang = d.profile.targetLang;
-      const lvl = d.profile.level[lang];
+      const lessonsDone = Object.values(d.progress).filter(p => p.completed).length;
+      const scores = Object.values(d.progress).filter(p => p.best != null).map(p => p.best);
+      const avg = scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : null;
+      const due = FL.srs.totalDue(d);
       const streak = FL.game.streak(d);
-      const xpL = FL.game.level(d.xp);
-      const week = FL.game.weekXp(d);
-      const goalXp = d.profile.plan ? d.profile.plan.weeklyXp : d.profile.weeklyGoal;
+      const cont = FL.learn.continueTarget(d);
+      const lang = d.profile.lang || 'en';
+      const startLevel = FL.course.level(lang, d.profile.levels[lang] || 'a1') || FL.content[lang].levels[0];
+      const target = cont || FL.learn.nextLesson(startLevel, d) || startLevel.lessons[0];
+      const targetLevel = FL.course.levelOf(target);
+      const tp = d.progress[target.id];
+      const myLevels = FL.course.allLevels().filter(l => FL.learn.levelStats(l, d).started);
       const mine = FL.db.myBookings();
       const upcoming = mine.filter(b => ['upcoming', 'live'].includes(FL.db.bookingStatus(b)));
-      const past = mine.filter(b => FL.db.bookingStatus(b) === 'completed').reverse();
-      const skills = ['speaking', 'listening', 'vocabulary', 'grammar', 'writing'];
-      const todayKey = FL.time.localKey();
-      const dueCards = ['my-words', ...FL.data.decks.map(x => x.id)].reduce((s, id) => s + FL.srs.deckStats(id, d).due, 0);
-      const dailyDone = !!d.daily[`${todayKey}:${lang}`];
+      const past = mine.filter(b => FL.db.bookingStatus(b) === 'completed').reverse().slice(0, 3);
+      const week = FL.learn.completedThisWeek(d);
+      const goal = d.profile.weeklyLessons || 2;
 
       el.innerHTML = `
-        <div class="dash-head">
-          <div><div class="small muted">${FL.time.fmtDateLong(Date.now())}</div>
-            <h1>${FL.time.greeting()}, ${esc(FL.util.firstName(user.name))} 👋</h1></div>
-          <div class="row row-wrap">
-            <a class="btn" href="#/practice">${icon('layers')} Practise${dueCards ? ` <span class="badge badge-accent">${dueCards} due</span>` : ''}</a>
-            <a class="btn btn-primary" href="#/book">${icon('calendar')} Book a lesson</a>
-          </div>
+        <div class="row between wrap mb-3" style="align-items:flex-end">
+          <div><div class="small muted">${FL.time.fmtDateLong(Date.now())}</div><h1 class="mb-0" style="font-size:clamp(1.8rem,3vw,2.3rem)">${FL.time.greeting()}, ${esc(FL.util.firstName(user.name))}</h1></div>
+          <div class="row wrap"><a class="btn" href="#/review">${icon('layers')} Review${due ? ` (${due})` : ''}</a><a class="btn btn-primary" href="#/courses">${icon('book')} All courses</a></div>
         </div>
 
-        <div class="stat-cards">
-          <a class="card stat card-hover" href="#/placement" style="color:inherit;text-decoration:none"><div class="icon-tile">${icon('target')}</div><div><div class="val">${lvl ? esc(lvl) : 'Test'}</div><div class="lbl">${FL.views.langName(lang)} level${lvl ? '' : ' — find out'}</div></div></a>
-          <div class="card stat"><div class="icon-tile accent">${icon('flame')}</div><div><div class="val">${streak}</div><div class="lbl">day streak${streak && !d.activity[todayKey] ? ' · practise today!' : ''}</div></div></div>
-          <div class="card stat"><div class="icon-tile warning">${icon('zap')}</div><div style="flex:1;min-width:0"><div class="val">${d.xp.toLocaleString()}</div><div class="lbl">XP · level ${xpL.lvl}</div><div class="progress mt-1" style="height:5px"><span style="width:${xpL.pct}%"></span></div></div></div>
-          <a class="card stat card-hover" href="#/pricing" style="color:inherit;text-decoration:none"><div class="icon-tile success">${icon('card')}</div><div><div class="val">${d.credits}</div><div class="lbl">lesson credit${d.credits === 1 ? '' : 's'} · top up</div></div></a>
+        <div class="card continue mb-3">
+          <div><div class="kicker mb-1">${cont ? 'Continue learning' : 'Start here'}</div>
+            <h2 class="mb-1" style="font-size:1.45rem">${esc(target.title)}</h2>
+            <p class="muted mb-2">${esc(FL.course.title(targetLevel))} · Lesson ${target.n} of ${targetLevel.lessons.length} · ${esc(target.focus)}</p>
+            <div class="progress" style="max-width:360px"><span style="width:${tp ? Math.round(((tp.seen || 0) / (target.slides.length + 3)) * 100) : 0}%"></span></div></div>
+          <a class="btn btn-primary btn-lg" href="#/lesson/${target.id}">${tp ? 'Continue' : 'Start lesson'} ${icon('arrow-right')}</a>
+        </div>
+
+        <div class="stat-row">
+          <div><strong>${lessonsDone}</strong><span>lessons completed</span></div>
+          <div><strong>${avg == null ? '—' : avg + '%'}</strong><span>average score</span></div>
+          <div><strong>${due}</strong><span>words to review</span></div>
+          <div><strong>${streak}</strong><span>day streak</span></div>
         </div>
 
         <div class="dash-grid">
-          <div class="dash-col">
+          <div class="stack">
             <div class="card">
-              <div class="card-title"><h3>${icon('calendar')} Upcoming lessons</h3><a class="btn btn-ghost btn-sm" href="#/book">${icon('plus')} New</a></div>
-              ${upcoming.length ? upcoming.map(b => lessonItem(b, 'upcoming')).join('') : `
-                <div class="empty">${icon('calendar')}<p><strong>No lessons booked yet.</strong><br>${d.trialUsed ? 'Pick a time that suits you.' : 'Your free 25-minute trial is waiting.'}</p>
-                <a class="btn btn-primary btn-sm" href="#/book${d.trialUsed ? '' : '?type=trial'}">${d.trialUsed ? 'Book a lesson' : 'Book free trial'}</a></div>`}
-            </div>
-
-            ${planCard(d)}
-
-            <div class="card">
-              <div class="card-title"><h3>${icon('check-circle')} Homework & tasks</h3><span class="small muted">${d.homework.filter(h => h.done).length}/${d.homework.length} done</span></div>
-              ${d.homework.length ? d.homework.map(h => `
-                <div class="hw-item ${h.done ? 'done' : ''}">
-                  <input type="checkbox" data-hw="${h.id}" ${h.done ? 'checked' : ''} aria-label="Mark as done: ${esc(h.text)}">
-                  <span class="hw-text">${esc(h.text)}${h.mine ? ' <span class="badge" style="font-size:.68rem">personal</span>' : ''}</span>
-                  ${h.link ? `<a class="btn btn-ghost btn-sm" href="${esc(h.link)}">Open</a>` : ''}
-                  ${h.mine ? `<button class="icon-btn" data-hw-del="${h.id}" aria-label="Delete task">${icon('trash')}</button>` : ''}
-                </div>`).join('') : '<p class="muted">Nothing here yet — your teacher will add homework after lessons.</p>'}
-              <form class="row mt-2" data-hw-add><input class="input" name="task" maxlength="140" placeholder="Add a personal task…" aria-label="New personal task"><button class="btn" type="submit">${icon('plus')} Add</button></form>
+              <div class="card-head"><h3>My courses</h3><a class="btn btn-quiet btn-sm" href="#/courses">Browse</a></div>
+              ${myLevels.length ? myLevels.map(l => { const st = FL.learn.levelStats(l, d); const nx = FL.learn.nextLesson(l, d); return `
+                <div class="my-level"><span class="level-code sm">${l.code}</span>
+                  <div><a href="#/course/${l.lang}/${l.id}" style="font-weight:700;color:var(--text);text-decoration:none">${esc(FL.course.title(l))} — ${esc(l.name)}</a>
+                    <div class="progress mt-1 ${st.done === st.total ? 'good' : ''}"><span style="width:${st.pct}%"></span></div>
+                    <div class="tiny muted mt-1">${st.done} of ${st.total} lessons${st.avg != null ? ` · average ${st.avg}%` : ''}${st.test && st.test.passed ? ' · level test passed' : ''}</div></div>
+                  <a class="btn btn-sm" href="${nx ? `#/lesson/${nx.id}` : `#/test/${l.lang}/${l.id}`}">${nx ? 'Continue' : 'Level test'}</a></div>`; }).join('')
+                : `<p class="muted mb-2">You haven’t started a course yet.</p><div class="row wrap"><a class="btn btn-primary btn-sm" href="#/lesson/${target.id}">Start ${esc(FL.course.title(targetLevel))}</a><a class="btn btn-sm" href="#/placement">Take the placement test</a></div>`}
             </div>
 
             <div class="card">
-              <div class="card-title"><h3>${icon('book')} Lesson history</h3><span class="small muted">${FL.util.plural(past.length, 'lesson')} completed</span></div>
-              ${past.length ? past.slice(0, 5).map(b => lessonItem(b, 'past')).join('') : '<p class="muted mb-0">Completed lessons and their notes will appear here.</p>'}
+              <div class="card-head"><h3>Live lessons</h3><a class="btn btn-quiet btn-sm" href="#/book">${icon('plus')} Book</a></div>
+              ${upcoming.length ? upcoming.map(b => lessonItem(b, false)).join('') : `<p class="muted mb-2">No live lessons booked.</p><a class="btn btn-sm" href="#/book${d.trialUsed ? '' : '?type=trial'}">${d.trialUsed ? 'Book a lesson' : 'Book your free trial'}</a>`}
+              ${past.length ? `<h4 class="mt-3 mb-0 small muted" style="text-transform:uppercase;letter-spacing:.06em">Recent</h4>${past.map(b => lessonItem(b, true)).join('')}` : ''}
+            </div>
+
+            <div class="card">
+              <div class="card-head"><h3>To do</h3><span class="small muted">${d.homework.filter(h => h.done).length} of ${d.homework.length} done</span></div>
+              ${d.homework.map(h => `<div class="hw-item ${h.done ? 'done' : ''}"><input type="checkbox" data-hw="${h.id}" ${h.done ? 'checked' : ''} aria-label="Done: ${esc(h.text)}">
+                <span class="hw-text">${esc(h.text)}</span>${h.link ? `<a class="btn btn-quiet btn-sm" href="${esc(h.link)}">Open</a>` : ''}${h.mine ? `<button type="button" class="icon-btn sm" data-hw-del="${h.id}" aria-label="Delete">${icon('trash')}</button>` : ''}</div>`).join('')}
+              <form class="row mt-2" data-hw-add><input class="input" name="task" maxlength="140" placeholder="Add your own task" aria-label="New task"><button class="btn" type="submit">Add</button></form>
             </div>
           </div>
 
-          <div class="dash-col">
+          <div class="stack">
             <div class="card">
-              <div class="card-title"><h3>${icon('target')} Weekly goal</h3><span class="tiny muted">last 7 days</span></div>
-              <div class="ring-wrap">${FL.ui.ring(Math.round(week / goalXp * 100), `${Math.min(999, Math.round(week / goalXp * 100))}%`, `${week} / ${goalXp} XP`)}
-                <div class="small"><p class="mb-1"><strong>${week >= goalXp ? 'Goal reached! 🎉' : `${goalXp - week} XP to go`}</strong></p>
-                <p class="muted mb-1">${dailyDone ? '✅ Daily challenge done' : '<a href="#/practice?tab=daily">Daily challenge</a> · up to +50 XP'}</p>
-                <p class="muted mb-0">${dueCards ? `<a href="#/practice?tab=cards">${dueCards} flashcards due</a>` : 'No flashcards due — nice!'}</p></div></div>
+              <div class="card-head"><h3>This week</h3><button type="button" class="btn btn-quiet btn-sm" data-onboard>Change goal</button></div>
+              <p class="mb-1"><strong>${week} of ${goal}</strong> lessons completed in the last 7 days</p>
+              <div class="goal-bar" aria-hidden="true">${Array.from({ length: goal }, (_, i) => `<i class="${i < week ? 'on' : ''}"></i>`).join('')}</div>
+              <p class="small muted mt-2 mb-0">${week >= goal ? 'Goal reached — well done.' : `${goal - week} more to reach your weekly goal.`}</p>
+            </div>
+            <div class="card"><div class="card-head"><h3>Activity</h3>${streak ? `<span class="tag good">${streak}-day streak</span>` : ''}</div>${heatmap(d)}</div>
+            <div class="card">
+              <div class="card-head"><h3>Levels</h3><a class="btn btn-quiet btn-sm" href="#/placement">Test again</a></div>
+              <table class="table"><tbody>${['en', 'fr'].map(l => `<tr><td>${FL.views.langName(l)}</td><td>${d.placement[l] ? `<strong>${esc(d.placement[l].level)}</strong> <span class="tiny muted">placement test</span>` : '<span class="muted">Not tested</span>'}</td></tr>`).join('')}</tbody></table>
             </div>
             <div class="card">
-              <div class="card-title"><h3>${icon('chart')} Skills</h3></div>
-              ${FL.ui.radar(skills.map(s => skillPct(d.skills[s] || 0)), ['Speaking', 'Listening', 'Vocabulary', 'Grammar', 'Writing'])}
-              <p class="tiny muted center mb-0">Grows as you practise: pronunciation → speaking, flashcards → vocabulary, quizzes → grammar.</p>
+              <div class="card-head"><h3>Live lesson credits</h3></div>
+              <p class="mb-2"><strong style="font-family:var(--serif);font-size:1.8rem">${d.credits}</strong> <span class="muted">available</span></p>
+              <a class="btn btn-sm" href="#/pricing">Buy credits</a>
             </div>
-            <div class="card"><div class="card-title"><h3>${icon('flame')} Activity</h3></div>${heatmap(d)}</div>
-            <div class="card">
-              <div class="card-title"><h3>${icon('trophy')} Badges</h3><span class="small muted">${d.badges.length}/${FL.data.badges.length}</span></div>
-              <div class="badges-grid">${FL.data.badges.map(b => `<div class="badge-item ${d.badges.includes(b.id) ? 'on' : ''}" title="${esc(b.name)} — ${esc(b.desc)}" role="img" aria-label="${esc(b.name)}: ${esc(b.desc)}${d.badges.includes(b.id) ? ' (unlocked)' : ' (locked)'}">${b.icon}</div>`).join('')}</div>
-            </div>
-            <div class="card">${FL.views.wordOfDay(lang)}</div>
           </div>
         </div>`;
     }
 
-    async function onClick(e) {
+    el.addEventListener('click', async e => {
       const t = e.target;
       const ics = t.closest('[data-ics]');
       if (ics) { const b = FL.db.myBookings().find(x => x.id === ics.dataset.ics); if (b) FL.ui.download(`lesson-${FL.time.dayKey(b.start)}.ics`, FL.cal.ics(b), 'text/calendar'); return; }
-      const rs = t.closest('[data-resched]');
-      if (rs) { FL.router.go('/book?reschedule=' + rs.dataset.resched); return; }
+      const rs = t.closest('[data-resched]'); if (rs) { FL.router.go('/book?reschedule=' + rs.dataset.resched); return; }
       const cn = t.closest('[data-cancel]');
       if (cn) {
         const b = FL.db.myBookings().find(x => x.id === cn.dataset.cancel);
         if (!b) return;
         const refundable = b.start - Date.now() >= FL.config.booking.cancelHours * 3600000;
-        const ok = await FL.ui.confirm({
-          title: 'Cancel this lesson?',
-          body: `${FL.time.fmtDateLong(b.start)} at ${FL.time.fmtTime(b.start)}.<br><br>${refundable ? (b.credits ? `Your ${FL.util.plural(b.credits, 'credit')} will be refunded.` : 'This lesson was free.') : `<strong>This lesson starts in less than ${FL.config.booking.cancelHours} hours, so the credit can’t be refunded.</strong>`}`,
-          confirmLabel: 'Cancel lesson', cancelLabel: 'Keep it', danger: true
-        });
+        const ok = await FL.ui.confirm({ title: 'Cancel this lesson?', body: `${FL.time.fmtDateLong(b.start)} at ${FL.time.fmtTime(b.start)}.<br><br>${refundable ? (b.credits ? `Your ${FL.util.plural(b.credits, 'credit')} will be refunded.` : 'This lesson was free.') : `<strong>It starts in less than ${FL.config.booking.cancelHours} hours, so the credit can’t be refunded.</strong>`}`, confirmLabel: 'Cancel lesson', cancelLabel: 'Keep it', danger: true });
         if (!ok) return;
         const r = FL.schedule.cancel(b.id);
-        if (r.ok) { FL.ui.toast(r.refunded ? `Lesson cancelled — ${FL.util.plural(r.refunded, 'credit')} refunded.` : 'Lesson cancelled.', 'success'); draw(); }
+        if (r.ok) { FL.ui.toast(r.refunded ? `Lesson cancelled. ${FL.util.plural(r.refunded, 'credit')} refunded.` : 'Lesson cancelled.', 'success'); draw(); }
         return;
       }
-      const hd = t.closest('[data-hw-del]');
-      if (hd) { FL.db.mutate(d => { d.homework = d.homework.filter(h => h.id !== hd.dataset.hwDel); }); draw(); return; }
-      if (t.closest('[data-onboard]')) { FL.pages.dashboard.onboard(draw); return; }
-    }
-
-    el.addEventListener('click', onClick);
+      const hd = t.closest('[data-hw-del]'); if (hd) { FL.db.mutate(d => { d.homework = d.homework.filter(h => h.id !== hd.dataset.hwDel); }); draw(); return; }
+      if (t.closest('[data-onboard]')) FL.pages.dashboard.onboard(draw);
+    });
     el.addEventListener('change', e => {
       const cb = e.target.closest('[data-hw]');
       if (!cb) return;
-      let reward = false;
-      FL.db.mutate(d => {
-        const h = d.homework.find(x => x.id === cb.dataset.hw);
-        if (!h) return;
-        h.done = cb.checked;
-        if (h.done && !h.rewarded) { h.rewarded = true; reward = true; }
-      });
-      if (reward) FL.game.award(10, { skill: 'writing' });
+      FL.db.mutate(d => { const h = d.homework.find(x => x.id === cb.dataset.hw); if (h) h.done = cb.checked; });
       cb.closest('.hw-item').classList.toggle('done', cb.checked);
-      const counter = cb.closest('.card').querySelector('.card-title .small');
       const d = FL.db.load();
-      if (counter) counter.textContent = `${d.homework.filter(h => h.done).length}/${d.homework.length} done`;
+      const c = cb.closest('.card').querySelector('.card-head .small');
+      if (c) c.textContent = `${d.homework.filter(h => h.done).length} of ${d.homework.length} done`;
     });
     el.addEventListener('submit', e => {
       const f = e.target.closest('[data-hw-add]');
@@ -219,74 +172,51 @@ FL.pages.dashboard = {
       if (!text) return;
       FL.db.mutate(d => { d.homework.push({ id: FL.util.uid('hw_'), text: text.slice(0, 140), done: false, mine: true }); });
       draw();
-      const input = el.querySelector('[data-hw-add] input');
-      if (input) input.focus();
+      const i = el.querySelector('[data-hw-add] input'); if (i) i.focus();
     });
-    el.addEventListener('click', e => { if (e.target.closest('[data-say]')) { const b = e.target.closest('[data-say]'); FL.speech.speak(b.dataset.say, b.dataset.lang); } });
 
     draw();
-    // Live-update "starts in" / join buttons every 30 s.
     const timer = setInterval(() => { if (!document.querySelector('.modal-backdrop') && !el.contains(document.activeElement)) { FL.db.processCompletedLessons(); draw(); } }, 30000);
-    if (!FL.db.load().profile.onboarded) setTimeout(() => { if (el.isConnected) FL.pages.dashboard.onboard(draw); }, 450);
+    if (!FL.db.load().profile.onboarded) setTimeout(() => { if (el.isConnected) FL.pages.dashboard.onboard(draw); }, 400);
     return () => clearInterval(timer);
   },
 
   onboard(done) {
     const { icon, esc } = FL.ui;
     const d = FL.db.load();
-    const st = { step: 0, lang: d.profile.targetLang || 'en', goal: d.profile.goal || 'conversation', level: d.profile.level[d.profile.targetLang] || '', hours: d.profile.hoursPerWeek || 2 };
-    const steps = ['Language', 'Goal', 'Level', 'Time'];
+    const st = { step: 0, lang: d.profile.lang || 'en', level: d.profile.levels[d.profile.lang || 'en'] || '', goal: d.profile.weeklyLessons || 2 };
+    const titles = ['Which language do you want to learn?', 'What is your level?', 'How many lessons per week?'];
     FL.ui.modal({
-      bare: true, wide: true,
-      body: `<div class="modal-head"><h3 id="ob-title">Let’s build your learning plan</h3><button class="icon-btn" data-close aria-label="Close">${icon('x')}</button></div><div class="modal-body" id="ob"></div><div class="modal-foot" id="ob-foot"></div>`,
+      bare: true,
+      body: `<div class="modal-head"><h3 id="ob-t">Set up your learning</h3><button type="button" class="icon-btn" data-close aria-label="Close">${icon('x')}</button></div><div class="modal-body" id="ob"></div><div class="modal-foot" id="ob-foot"></div>`,
       onMount({ el, close }) {
+        el.setAttribute('aria-labelledby', 'ob-t');
         const body = el.querySelector('#ob'), foot = el.querySelector('#ob-foot');
-        el.setAttribute('aria-labelledby', 'ob-title');
-        function opt(attr, val, cur, title, sub, ic) {
-          return `<button class="option-card" role="radio" aria-checked="${cur === val}" data-${attr}="${esc(val)}">${ic ? `<span class="icon-tile">${icon(ic)}</span>` : ''}<span class="oc-body"><strong>${esc(title)}</strong>${sub ? `<small>${esc(sub)}</small>` : ''}</span></button>`;
-        }
+        const opt = (k, v, title, sub) => `<button type="button" class="option" role="radio" aria-checked="${String(st[k]) === String(v)}" data-k="${k}" data-v="${esc(v)}"><span><strong>${esc(title)}</strong>${sub ? `<small>${esc(sub)}</small>` : ''}</span></button>`;
         function render() {
-          const prog = `<div class="row mb-2" style="gap:6px">${steps.map((s, i) => `<div style="flex:1"><div class="progress" style="height:5px"><span style="width:${i <= st.step ? 100 : 0}%"></span></div><div class="tiny ${i === st.step ? '' : 'muted'} mt-1">${s}</div></div>`).join('')}</div>`;
-          let html = '';
-          if (st.step === 0) html = `<h4>Which language do you want to learn?</h4><div class="option-cards" role="radiogroup">${opt('lang', 'en', st.lang, 'English', 'General, business, IELTS, kids & teens', 'globe')}${opt('lang', 'fr', st.lang, 'French', 'From zero, conversation, DELF/DALF', 'globe')}</div>`;
-          if (st.step === 1) html = `<h4>What’s your main goal?</h4><div class="option-cards grid grid-2" role="radiogroup">${FL.data.GOALS.map(g => opt('goal', g.id, st.goal, g.label, '', g.icon)).join('')}</div>`;
-          if (st.step === 2) html = `<h4>What’s your current level?</h4><div class="option-cards grid grid-2" role="radiogroup">
-            ${opt('level', '', st.level, 'I’m not sure', 'Take the 5-min placement test later', 'target')}
-            ${FL.data.LEVELS.slice(0, 5).map(l => opt('level', l, st.level, `${l} — ${FL.data.LEVEL_INFO[l].name}`, FL.data.LEVEL_INFO[l].can[0])).join('')}</div>`;
-          if (st.step === 3) html = `<h4>How much time can you study each week?</h4><div class="option-cards grid grid-2" role="radiogroup">
-            ${[[1, '1 hour', 'Light — 1 lesson a week'], [2, '2 hours', 'Steady — 2 lessons a week'], [3, '3 hours', 'Committed — 2 lessons + practice'], [5, '5+ hours', 'Intensive — 3 lessons a week']].map(([v, t, s]) => opt('hours', String(v), String(st.hours), t, s, 'clock')).join('')}</div>`;
-          body.innerHTML = prog + html;
-          foot.innerHTML = `${st.step > 0 ? `<button class="btn btn-ghost" data-back>${icon('arrow-left')} Back</button>` : ''}<button class="btn btn-primary" data-next>${st.step === 3 ? `${icon('sparkles')} Create my plan` : `Continue ${icon('arrow-right')}`}</button>`;
-          const first = body.querySelector('[aria-checked="true"]') || body.querySelector('.option-card');
-          if (first) first.focus();
+          let html = `<p class="small muted mb-1">Step ${st.step + 1} of 3</p><h4 class="mb-2">${titles[st.step]}</h4><div class="option-list" role="radiogroup">`;
+          if (st.step === 0) html += opt('lang', 'en', 'English', 'Courses A1 to B2') + opt('lang', 'fr', 'French', 'Courses A1 to B2, explained in English');
+          if (st.step === 1) html += opt('level', '', 'I’m not sure', 'I’ll take the placement test') + FL.content[st.lang].levels.map(l => opt('level', l.code, `${l.code} — ${l.name}`, l.summary)).join('');
+          if (st.step === 2) html += [[1, 'Light', 'About 20 minutes a week'], [2, 'Regular', 'About 45 minutes a week'], [3, 'Committed', 'About an hour a week'], [5, 'Intensive', 'Almost every day']].map(([v, t, s]) => opt('goal', v, `${v} lesson${v > 1 ? 's' : ''} · ${t}`, s)).join('');
+          body.innerHTML = html + '</div>';
+          foot.innerHTML = `${st.step ? `<button type="button" class="btn btn-quiet" data-back>Back</button>` : ''}<button type="button" class="btn btn-primary" data-next>${st.step === 2 ? 'Save' : 'Continue'}</button>`;
         }
         el.addEventListener('click', e => {
-          const o = e.target.closest('.option-card');
-          if (o) {
-            ['lang', 'goal', 'level', 'hours'].forEach(k => { if (o.dataset[k] !== undefined) st[k] = k === 'hours' ? +o.dataset[k] : o.dataset[k]; });
-            body.querySelectorAll('.option-card').forEach(x => x.setAttribute('aria-checked', String(x === o)));
-            return;
-          }
+          const o = e.target.closest('.option');
+          if (o) { st[o.dataset.k] = o.dataset.k === 'goal' ? +o.dataset.v : o.dataset.v; body.querySelectorAll('.option').forEach(x => x.setAttribute('aria-checked', String(x === o))); return; }
           if (e.target.closest('[data-back]')) { st.step--; render(); return; }
           if (e.target.closest('[data-next]')) {
-            if (st.step < 3) { st.step++; render(); return; }
-            const plan = FL.plan.generate({ goal: st.goal, hoursPerWeek: st.hours, targetLang: st.lang });
-            FL.db.mutate(dd => {
-              dd.profile.targetLang = st.lang; dd.profile.goal = st.goal; dd.profile.hoursPerWeek = st.hours;
-              if (st.level) dd.profile.level[st.lang] = st.level;
-              dd.profile.plan = plan; dd.profile.weeklyGoal = plan.weeklyXp; dd.profile.onboarded = true;
-            });
+            if (st.step < 2) { if (st.step === 0 && !FL.content[st.lang].levels.some(l => l.code === st.level)) st.level = ''; st.step++; render(); return; }
+            FL.db.mutate(dd => { dd.profile.lang = st.lang; if (st.level) dd.profile.levels[st.lang] = st.level; dd.profile.weeklyLessons = st.goal; dd.profile.onboarded = true; });
             close();
-            FL.ui.toast('Your personal weekly plan is ready!', 'success');
-            if (!st.level) setTimeout(() => FL.ui.toast('Tip: take the placement test to set your level.', 'info', 4000), 600);
-            done && done();
+            FL.ui.toast('Your learning settings are saved.', 'success');
+            if (!st.level) setTimeout(() => FL.router.go('/placement'), 300);
+            else done && done();
           }
         });
         render();
       },
-      onClose() {
-        if (!FL.db.load().profile.onboarded) FL.db.mutate(dd => { dd.profile.onboarded = true; });
-      }
+      onClose() { if (!FL.db.load().profile.onboarded) FL.db.mutate(dd => { dd.profile.onboarded = true; }); }
     });
   }
 };

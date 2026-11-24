@@ -11,28 +11,27 @@ FL.pages.classroom = {
     const isDemo = params.id === 'demo';
     const user = FL.auth.current();
     if (!isDemo && !user) {
-      return `<section class="section"><div class="container center" style="max-width:520px"><div class="icon-tile" style="margin:0 auto 16px">${icon('video')}</div>
+      return `<section class="section"><div class="container center" style="max-width:520px">
         <h1 style="font-size:2rem">Sign in to open your classroom</h1><p class="muted">Each lesson has a private classroom with your whiteboard, notes and vocabulary.</p>
-        <div class="row row-wrap" style="justify-content:center"><a class="btn btn-primary" href="#/login?next=${encodeURIComponent('/classroom/' + params.id)}">Sign in</a><a class="btn" href="#/classroom/demo">Try the demo classroom</a></div></div></section>`;
+        <div class="row wrap" style="justify-content:center"><a class="btn btn-primary" href="#/login?next=${encodeURIComponent('/classroom/' + params.id)}">Sign in</a><a class="btn" href="#/classroom/demo">Try the demo classroom</a></div></div></section>`;
     }
     const b = isDemo ? null : FL.db.myBookings().find(x => x.id === params.id);
     if (!isDemo && !b) {
       return `<section class="section"><div class="container center" style="max-width:520px"><h1 style="font-size:2rem">Classroom not found</h1><p class="muted">This lesson doesn’t exist or belongs to another account.</p><a class="btn btn-primary" href="#/dashboard">Back to dashboard</a></div></section>`;
     }
     const t = b ? FL.schedule.lessonType(b.type) : null;
-    const c = b ? FL.data.courses.find(x => x.id === b.courseId) : null;
     const st = b ? FL.db.bookingStatus(b) : 'demo';
-    const badge = { demo: '<span class="badge badge-warning">Demo</span>', upcoming: `<span class="badge badge-primary">${icon('clock')} Starts ${FL.time.relative(b ? b.start : 0)}</span>`, live: `<span class="badge badge-danger">${icon('video')} Live now</span>`, completed: `<span class="badge badge-success">${icon('check')} Completed</span>`, cancelled: '<span class="badge">Cancelled</span>' }[st];
-    const colors = ['#1b1a22', '#4f46e5', '#f26b5b', '#0f9f6e', '#d98a06'];
+    const badge = { demo: '<span class="tag warn">Demo</span>', upcoming: `<span class="tag brand">${icon('clock')} Starts ${FL.time.relative(b ? b.start : 0)}</span>`, live: `<span class="tag bad">${icon('video')} Live now</span>`, completed: `<span class="tag good">${icon('check')} Completed</span>`, cancelled: '<span class="tag">Cancelled</span>' }[st];
+    const colors = ['#1d1d1b', '#1f3a68', '#b42318', '#2e7d4f', '#93650a'];
     return `
-    <section class="section" style="padding-top:28px"><div class="container">
+    <section class="section-tight"><div class="container">
       <div class="class-top">
         <div>
           <div class="crumbs mb-1"><a href="#/${user ? 'dashboard' : ''}">${user ? 'Dashboard' : 'Home'}</a><span>/</span><span>Classroom</span></div>
-          <h1 style="font-size:clamp(1.5rem,3vw,2.1rem);margin:0">${isDemo ? 'Virtual classroom — demo' : `${esc(t.name)}${c ? ' · ' + esc(c.title) : ''}`}</h1>
-          <div class="row row-wrap mt-1" style="gap:8px">${badge}<span class="small muted">${isDemo ? 'Everything here works and is saved in your browser.' : `${FL.time.fmtDateLong(b.start)} · ${FL.time.fmtTime(b.start)}–${FL.time.fmtTime(b.end)}`}</span></div>
+          <h1 style="font-size:clamp(1.6rem,3vw,2.2rem);margin:0">${isDemo ? 'Virtual classroom — demo' : `${esc(t.name)}${b.topic ? ' · ' + esc(b.topic) : ''}`}</h1>
+          <div class="row wrap mt-1" style="gap:8px">${badge}<span class="small muted">${isDemo ? 'Everything here works and is saved in your browser.' : `${FL.time.fmtDateLong(b.start)} · ${FL.time.fmtTime(b.start)}–${FL.time.fmtTime(b.end)}`}</span></div>
         </div>
-        <div class="row row-wrap">
+        <div class="row wrap">
           <a class="btn btn-primary" href="${esc(FL.config.teacher.meetingLink)}" target="_blank" rel="noopener">${icon('video')} Join video call</a>
         </div>
       </div>
@@ -55,7 +54,7 @@ FL.pages.classroom = {
           <canvas class="board-canvas" id="board" aria-label="Shared whiteboard"></canvas>
         </div>
         <div class="stack">
-          <div class="card card-pad-sm">
+          <div class="card card-sm">
             <div class="tabs" role="tablist" style="margin-bottom:14px">
               <button class="tab" role="tab" data-ctab="notes" aria-selected="true">${icon('book')} Notes</button>
               <button class="tab" role="tab" data-ctab="vocab" aria-selected="false">${icon('star')} Vocabulary</button>
@@ -63,7 +62,7 @@ FL.pages.classroom = {
             </div>
             <div data-cpanel="notes">
               <textarea class="textarea" id="notes" style="min-height:300px" placeholder="Lesson notes, corrections and useful phrases…" aria-label="Lesson notes"></textarea>
-              <div class="row between mt-1"><span class="tiny muted" id="notes-status">Autosaves as you type</span><button class="btn btn-ghost btn-sm" data-dl-notes>${icon('download')} .txt</button></div>
+              <div class="row between mt-1"><span class="tiny muted" id="notes-status">Autosaves as you type</span><button class="btn btn-quiet btn-sm" data-dl-notes>${icon('download')} .txt</button></div>
             </div>
             <div data-cpanel="vocab" hidden>
               <form id="vocab-form" class="stack">
@@ -73,21 +72,21 @@ FL.pages.classroom = {
                 <button class="btn btn-primary btn-sm" type="submit" style="margin-left:auto">${icon('plus')} Save as flashcard</button></div>
               </form>
               <ul class="vocab-list mt-2" id="vocab-list"></ul>
-              <a class="btn btn-soft btn-sm btn-block mt-2" href="#/practice?tab=cards">${icon('layers')} Study these flashcards</a>
+              <a class="btn btn-sm btn-block mt-2" href="#/practice?tab=cards">${icon('layers')} Study these flashcards</a>
             </div>
             <div data-cpanel="timer" hidden>
               <div class="timer-display" id="timer">00:00</div>
-              <div class="row row-wrap mt-2" style="justify-content:center">
+              <div class="row wrap mt-2" style="justify-content:center">
                 <button class="btn btn-primary btn-sm" data-timer="toggle">${icon('play')} Start</button>
                 <button class="btn btn-sm" data-timer="reset">${icon('repeat')} Reset</button>
               </div>
-              <div class="row row-wrap mt-2" style="justify-content:center;gap:6px">${[2, 5, 10, 25].map(m => `<button class="chip" data-preset="${m}">${m} min</button>`).join('')}<button class="chip" data-preset="lesson">Lesson</button></div>
+              <div class="row wrap mt-2" style="justify-content:center;gap:6px">${[2, 5, 10, 25].map(m => `<button class="chip" data-preset="${m}">${m} min</button>`).join('')}<button class="chip" data-preset="lesson">Lesson</button></div>
               <p class="tiny muted center mt-2 mb-0">Use it for timed speaking tasks (e.g. IELTS Part 2 = 2 min).</p>
             </div>
           </div>
-          <div class="card card-pad-sm">
-            <h4 class="mb-1">${icon('info', '')} In this classroom</h4>
-            <ul class="check-list small"><li>${icon('check')}<span>Board, notes and words are saved automatically</span></li><li>${icon('check')}<span>Saved words become spaced-repetition flashcards</span></li><li>${icon('check')}<span>Download the board and notes after class</span></li></ul>
+          <div class="card card-sm">
+            <h4 class="mb-1">In this classroom</h4>
+            <ul class="list-check small"><li>${icon('check')}<span>Board, notes and words are saved automatically</span></li><li>${icon('check')}<span>Saved words become spaced-repetition flashcards</span></li><li>${icon('check')}<span>Download the board and notes after class</span></li></ul>
           </div>
         </div>
       </div>
@@ -107,10 +106,10 @@ FL.pages.classroom = {
     if (isDemo && !data.boards.demo) {
       FL.db.mutate(d => {
         d.boards.demo = [
-          { type: 'text', x: 0.04, y: 0.1, text: 'Present perfect = have / has + past participle', color: '#4f46e5', size: 6 },
-          { type: 'text', x: 0.04, y: 0.24, text: '✔ I have lived in KL since 2019.', color: '#0f9f6e', size: 4 },
-          { type: 'text', x: 0.04, y: 0.36, text: '✖ I have went to Paris.  →  I went / I have been', color: '#f26b5b', size: 4 },
-          { type: 'text', x: 0.04, y: 0.55, text: 'for + period (3 years)   ·   since + point (2019)', color: '#1b1a22', size: 4 }
+          { type: 'text', x: 0.04, y: 0.1, text: 'Present perfect = have / has + past participle', color: '#1f3a68', size: 6 },
+          { type: 'text', x: 0.04, y: 0.24, text: '✔ I have lived in KL since 2019.', color: '#2e7d4f', size: 4 },
+          { type: 'text', x: 0.04, y: 0.36, text: '✖ I have went to Paris.  →  I went / I have been', color: '#b42318', size: 4 },
+          { type: 'text', x: 0.04, y: 0.55, text: 'for + period (3 years)   ·   since + point (2019)', color: '#1d1d1b', size: 4 }
         ];
         if (!d.notes.demo) d.notes.demo = 'Topic: Present perfect vs past simple\n\n• Use present perfect for life experience and unfinished time.\n• Use past simple with finished time words (yesterday, in 2020, last week).\n\nCorrections:\n• "I have went" → "I went" / "I have been"\n\nHomework: write 5 sentences about things you have done this year.';
       });
@@ -120,7 +119,7 @@ FL.pages.classroom = {
     /* ---------------- Whiteboard */
     const ctx = canvas.getContext('2d');
     let items = Array.isArray(data.boards[id]) ? data.boards[id] : [];
-    const tool = { name: 'pen', color: '#1b1a22', size: 3 };
+    const tool = { name: 'pen', color: '#1d1d1b', size: 3 };
     let drawing = null;
     let W = 0, H = 0;
 
@@ -198,7 +197,7 @@ FL.pages.classroom = {
       FL.ui.modal({
         title: 'Add text to the board',
         body: `<div class="field mb-0"><label for="bt">Text</label><input id="bt" class="input" maxlength="80" placeholder="e.g. Phrasal verb: to give up"></div>`,
-        actions: [{ label: 'Cancel', className: 'btn-ghost' }, {
+        actions: [{ label: 'Cancel', className: 'btn-quiet' }, {
           label: 'Add', className: 'btn-primary', onClick({ el }) {
             const v = el.querySelector('#bt').value.trim();
             if (!v) return false;
@@ -230,7 +229,8 @@ FL.pages.classroom = {
     const saveNotes = FL.util.debounce(() => {
       const prevWords = (FL.db.load().notes[id] || '').split(/\s+/).filter(Boolean).length;
       const words = notes.value.split(/\s+/).filter(Boolean).length;
-      FL.db.mutate(d => { d.notes[id] = notes.value.slice(0, 20000); if (words > prevWords) d.skills.writing += Math.min(5, words - prevWords) / 5; });
+      FL.db.mutate(d => { d.notes[id] = notes.value.slice(0, 20000); });
+      if (words > prevWords) FL.game.award(1);
       ns.textContent = `Saved · ${FL.time.fmtTime(Date.now(), FL.time.browserTz())}`;
     }, 600);
     notes.addEventListener('input', () => { ns.textContent = 'Saving…'; saveNotes(); });
@@ -249,7 +249,7 @@ FL.pages.classroom = {
       const front = f.front.value.trim(), back = f.back.value.trim();
       if (!front || !back) return;
       FL.db.mutate(d => { d.myWords.push({ id: FL.util.uid('w_'), lang: f.lang.value, front, back, example: '', lesson: id, at: Date.now() }); });
-      FL.game.award(3, { skill: 'vocabulary' });
+      FL.game.award(1);
       f.front.value = ''; f.back.value = ''; f.front.focus();
       drawVocab();
     });

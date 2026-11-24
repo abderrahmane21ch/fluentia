@@ -83,23 +83,20 @@ FL.config = {
       desc: 'Double session for exam prep, deep dives or fast progress.' }
   ],
 
-  currency: {
-    base: 'USD',
-    default: 'MYR',
-    // Indicative conversion rates from USD. Update whenever you like.
-    rates: { USD: 1, MYR: 4.4, EUR: 0.92, GBP: 0.79 }
-  },
-
+  // All prices are in US dollars.
   plans: [
-    { id: 'trial', name: 'Trial lesson', credits: 0, priceUSD: 0, cta: 'Book free trial', unit: '25 minutes',
-      perks: ['Level check & goal setting', 'Personal learning plan', 'Access to all practice tools', 'No card required'] },
-    { id: 'single', name: 'Pay as you go', credits: 1, priceUSD: 18, cta: 'Buy 1 lesson', unit: 'per 50-min lesson',
-      perks: ['1 lesson credit', 'Lesson notes & homework', 'Vocabulary saved to flashcards', 'Free rescheduling (24h)'] },
-    { id: 'pack10', name: '10-lesson pack', credits: 10, priceUSD: 153, featured: true, ribbon: 'Most popular · save 15%', cta: 'Get 10 lessons', unit: 'one-time',
-      perks: ['10 lesson credits', 'Everything in Pay as you go', 'Progress report every 5 lessons', 'Priority booking slots'] },
-    { id: 'monthly', name: 'Monthly fluency', credits: 8, priceUSD: 128, period: '/month', ribbon: 'Best for habit', cta: 'Start monthly', unit: '8 lessons / month',
-      perks: ['8 lesson credits each month', '2 lessons per week rhythm', 'Monthly CEFR progress check', 'Cancel anytime'] }
+    { id: 'self', name: 'Self-study', priceUSD: 0, credits: 0, unit: 'free forever', cta: 'Start learning',
+      perks: ['All 40 lessons in English & French', 'Interactive exercises with instant feedback', 'Level tests and certificates', 'Vocabulary review & speaking practice'] },
+    { id: 'single', name: 'Live lesson', priceUSD: 18, credits: 1, unit: 'per 50-minute lesson', cta: 'Buy 1 lesson',
+      perks: ['1-on-1 video lesson', 'Personal feedback and correction', 'Lesson notes in your classroom', 'Free rescheduling up to 24h before'] },
+    { id: 'pack10', name: '10-lesson pack', priceUSD: 153, credits: 10, featured: true, ribbon: 'Best value', unit: '$15.30 per lesson \u00b7 save 15%', cta: 'Get 10 lessons',
+      perks: ['10 lesson credits, no expiry', 'Personal study plan', 'Progress report every 5 lessons', 'Priority booking'] },
+    { id: 'monthly', name: 'Monthly plan', priceUSD: 128, credits: 8, period: '/ month', unit: '8 lessons \u00b7 $16 per lesson', cta: 'Start monthly plan',
+      perks: ['2 lessons a week', 'Monthly level check', 'Homework after every lesson', 'Cancel anytime'] }
   ],
+
+  // Topics students can choose for a live lesson.
+  topics: ['General English', 'Conversation practice', 'IELTS preparation', 'Business English', 'English for school', 'General French', 'French conversation', 'DELF / DALF preparation'],
 
   // Add real student feedback here to show a testimonials section on the home page, e.g.
   // { name: 'Aisyah', detail: 'IELTS student, Kuala Lumpur', quote: '...' }

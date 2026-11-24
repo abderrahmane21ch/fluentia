@@ -132,7 +132,7 @@ FL.bus = (function () {
 
 /* ---------------------------------------------------------------- Prefs */
 FL.prefs = {
-  get() { return FL.util.withDefaults(FL.store.get('prefs', {}), { theme: null, currency: FL.config.currency.default, timezone: null }); },
+  get() { return FL.util.withDefaults(FL.store.get('prefs', {}), { theme: null, timezone: null }); },
   set(patch) { const p = Object.assign(this.get(), patch); FL.store.set('prefs', p); FL.bus.emit('prefs', p); return p; }
 };
 
@@ -354,24 +354,23 @@ FL.auth = (function () {
 FL.db = (function () {
   const DEFAULTS = {
     registered: false,
-    profile: { targetLang: 'en', goal: 'conversation', level: { en: null, fr: null }, weeklyGoal: 300, timezone: null, onboarded: false, hoursPerWeek: 2, activeCourse: null, plan: null },
+    profile: { lang: 'en', level: null, goal: 'conversation', weeklyLessons: 2, timezone: null, onboarded: false, levels: { en: null, fr: null } },
     credits: 0,
     trialUsed: false,
-    xp: 0,
     activity: {},
-    skills: { speaking: 0, listening: 0, vocabulary: 0, grammar: 0, writing: 0 },
-    stats: { reviews: 0, pronAttempts: 0, bestPron: 0, daily: 0, booked: 0, completed: 0, listens: 0 },
-    cards: {},
-    myWords: [],
-    badges: [],
-    homework: [],
+    progress: {},
     notes: {},
     boards: {},
-    pron: {},
+    levelTests: {},
     placement: {},
-    daily: {},
+    cards: {},
+    myWords: [],
+    pron: {},
+    homework: [],
     processed: [],
-    transactions: []
+    transactions: [],
+    stats: { reviews: 0, pronAttempts: 0, bestPron: 0, booked: 0, completed: 0 },
+    last: null
   };
 
   function uid() { const u = FL.auth.current(); return u ? u.id : 'guest'; }
@@ -385,22 +384,28 @@ FL.db = (function () {
     return r === undefined ? d : r;
   }
 
+  function hasProgress(d) {
+    return Object.keys(d.progress).length || Object.keys(d.cards).length || d.myWords.length || Object.keys(d.placement).length || Object.keys(d.levelTests).length;
+  }
+
   function initForNewUser(user) {
     const guest = load('guest');
-    const hasGuestProgress = guest.xp > 0 || Object.keys(guest.cards).length || guest.myWords.length || Object.keys(guest.placement).length;
-    const d = hasGuestProgress ? guest : load(user.id);
+    const migrate = hasProgress(guest);
+    const d = migrate ? guest : load(user.id);
     d.registered = true;
     d.profile.timezone = FL.prefs.get().timezone || FL.time.browserTz();
     d.homework = [
-      { id: FL.util.uid('hw_'), text: 'Take the placement test to find your CEFR level', done: Object.keys(d.placement).length > 0, link: '#/placement' },
-      { id: FL.util.uid('hw_'), text: 'Book your free 25-minute trial lesson', done: false, link: '#/book?type=trial' },
-      { id: FL.util.uid('hw_'), text: 'Review 10 flashcards in the Practice hub', done: false, link: '#/practice?tab=cards' },
-      { id: FL.util.uid('hw_'), text: 'Record yourself in the Pronunciation coach', done: false, link: '#/practice?tab=speak' }
+      { id: FL.util.uid('hw_'), text: 'Take the placement test to find your level', done: Object.keys(d.placement).length > 0, link: '#/placement', auto: 'placement' },
+      { id: FL.util.uid('hw_'), text: 'Complete your first lesson', done: Object.values(d.progress).some(p => p.completed), link: '#/courses', auto: 'lesson' },
+      { id: FL.util.uid('hw_'), text: 'Review your vocabulary', done: false, link: '#/review', auto: 'review' },
+      { id: FL.util.uid('hw_'), text: 'Book your free 25-minute trial lesson', done: false, link: '#/book?type=trial', auto: 'trial' }
     ];
     save(d, user.id);
-    if (hasGuestProgress) FL.store.remove('data.guest');
-    FL.game.checkBadges(user.id, true);
+    if (migrate) FL.store.remove('data.guest');
   }
+
+  // Tick an automatic to-do item (placement, lesson, review, trial).
+  function tick(d, key) { d.homework.forEach(h => { if (h.auto === key) h.done = true; }); }
 
   // Bookings are global so that one student's lesson blocks the slot for everyone.
   function allBookings() { return FL.store.get('bookings', []); }
@@ -416,29 +421,25 @@ FL.db = (function () {
     if (now >= b.start) return 'live';
     return 'upcoming';
   }
-
-  // Award XP etc. for lessons that have finished since last visit.
   function processCompletedLessons() {
     const u = FL.auth.current();
     if (!u) return;
-    const done = myBookings().filter(b => bookingStatus(b) === 'completed');
     const d = load();
-    const fresh = done.filter(b => !d.processed.includes(b.id));
+    const fresh = myBookings().filter(b => bookingStatus(b) === 'completed' && !d.processed.includes(b.id));
     if (!fresh.length) return;
     mutate(dd => {
       fresh.forEach(b => {
         dd.processed.push(b.id);
         dd.stats.completed++;
-        dd.homework.unshift({ id: FL.util.uid('hw_'), text: `Review your notes and vocabulary from the ${FL.time.fmtDate(b.start)} lesson`, done: false, link: `#/classroom/${b.id}` });
+        dd.homework.unshift({ id: FL.util.uid('hw_'), text: `Review the notes from your ${FL.time.fmtDate(b.start)} live lesson`, done: false, link: `#/classroom/${b.id}` });
       });
     });
-    fresh.forEach(() => FL.game.award(100, { skill: 'speaking', amount: 5, silent: true }));
   }
 
-  return { load, save, mutate, uid, initForNewUser, allBookings, saveBookings, myBookings, bookingStatus, processCompletedLessons, DEFAULTS };
+  return { load, save, mutate, uid, initForNewUser, tick, allBookings, saveBookings, myBookings, bookingStatus, processCompletedLessons, DEFAULTS };
 })();
 
-/* --------------------------------------------------------- Gamification */
+/* ------------------------------------------------------- Activity & streaks */
 FL.game = (function () {
   function streak(d) {
     const today = FL.time.localKey();
@@ -447,57 +448,119 @@ FL.game = (function () {
     while (d.activity[key]) { n++; key = FL.time.addDaysKey(key, -1); }
     return n;
   }
-  function weekXp(d) {
-    const today = FL.time.localKey();
-    let sum = 0;
-    for (let i = 0; i < 7; i++) sum += d.activity[FL.time.addDaysKey(today, -i)] || 0;
-    return sum;
-  }
-  function level(xp) {
-    const lvl = Math.floor(Math.sqrt(xp / 50)) + 1;
-    const cur = 50 * Math.pow(lvl - 1, 2), next = 50 * Math.pow(lvl, 2);
-    return { lvl, cur, next, pct: Math.round(((xp - cur) / (next - cur)) * 100) };
-  }
-  function award(xp, opts = {}) {
-    const d = FL.db.mutate(dd => {
-      dd.xp += xp;
+  // Record study activity for today (used for streaks and the activity calendar).
+  function award(points = 1) {
+    FL.db.mutate(d => {
       const k = FL.time.localKey();
-      dd.activity[k] = (dd.activity[k] || 0) + xp;
-      if (opts.skill) dd.skills[opts.skill] = (dd.skills[opts.skill] || 0) + (opts.amount || 1);
+      d.activity[k] = (d.activity[k] || 0) + points;
     });
-    if (!opts.silent && xp > 0 && FL.ui) FL.ui.xp(xp);
-    checkBadges();
-    return d;
   }
-  function checkBadges(id, quiet) {
-    const d = FL.db.load(id);
-    const s = { streak: streak(d) };
-    const fresh = FL.data.badges.filter(b => !d.badges.includes(b.id) && b.test(d, s));
-    if (!fresh.length) return;
-    FL.db.mutate(dd => { fresh.forEach(b => dd.badges.push(b.id)); }, id);
-    if (FL.ui) fresh.forEach((b, i) => setTimeout(() => FL.ui.toast(`<b>Badge unlocked: ${b.icon} ${FL.ui.esc(b.name)}</b>${FL.ui.esc(b.desc)}`, 'badge-t', 4500, true), quiet ? 400 + i * 300 : i * 300));
+  function activeDays(d, days = 7) {
+    const today = FL.time.localKey();
+    let n = 0;
+    for (let i = 0; i < days; i++) if (d.activity[FL.time.addDaysKey(today, -i)]) n++;
+    return n;
   }
-  function wordOfDay(lang) {
-    const list = FL.data.words[lang];
-    const day = Math.floor(Date.now() / 86400000);
-    return list[day % list.length];
-  }
-  return { streak, weekXp, level, award, checkBadges, wordOfDay };
+  return { streak, award, activeDays };
 })();
 
-/* ---------------------------------------------------------- Flashcards */
+/* -------------------------------------------------------- Lesson progress */
+FL.learn = (function () {
+  const PASS = 60;
+  function get(id, d = FL.db.load()) { return d.progress[id] || null; }
+  function status(id, d = FL.db.load()) {
+    const p = get(id, d);
+    if (!p) return 'new';
+    if (p.completed) return 'done';
+    return 'started';
+  }
+  function touch(id) {
+    FL.db.mutate(d => {
+      const p = d.progress[id] || (d.progress[id] = { seen: 0, slidesDone: false, best: null, attempts: 0, completed: false, started: Date.now() });
+      p.last = Date.now();
+      d.last = id;
+    });
+  }
+  function slideSeen(id, index, total) {
+    let first = false;
+    FL.db.mutate(d => {
+      const p = d.progress[id];
+      if (!p) return;
+      p.seen = Math.max(p.seen || 0, index + 1);
+      if (p.seen >= total && !p.slidesDone) { p.slidesDone = true; first = true; }
+      p.last = Date.now();
+    });
+    if (first) FL.game.award(2);
+  }
+  // Save a practice result. Returns { best, completedNow }.
+  function saveScore(id, pct) {
+    let completedNow = false;
+    const d = FL.db.mutate(dd => {
+      const p = dd.progress[id] || (dd.progress[id] = { seen: 0, slidesDone: false, best: null, attempts: 0, completed: false, started: Date.now() });
+      p.attempts++;
+      p.best = p.best == null ? pct : Math.max(p.best, pct);
+      p.lastScore = pct;
+      p.last = Date.now();
+      if (!p.completed && pct >= PASS) { p.completed = true; p.doneAt = Date.now(); completedNow = true; FL.db.tick(dd, 'lesson'); }
+      dd.last = id;
+    });
+    FL.game.award(5);
+    return { best: d.progress[id].best, completedNow };
+  }
+  function levelStats(level, d = FL.db.load()) {
+    const total = level.lessons.length;
+    let done = 0, started = 0, sum = 0, scored = 0;
+    level.lessons.forEach(l => {
+      const p = d.progress[l.id];
+      if (!p) return;
+      started++;
+      if (p.completed) done++;
+      if (p.best != null) { sum += p.best; scored++; }
+    });
+    const test = d.levelTests[level.key] || null;
+    return { total, done, started, pct: Math.round(done / total * 100), avg: scored ? Math.round(sum / scored) : null, test };
+  }
+  function nextLesson(level, d = FL.db.load()) {
+    return level.lessons.find(l => !(d.progress[l.id] && d.progress[l.id].completed)) || null;
+  }
+  function continueTarget(d = FL.db.load()) {
+    if (d.last && FL.course.lesson(d.last)) {
+      const l = FL.course.lesson(d.last);
+      const p = d.progress[l.id];
+      if (p && p.completed) {
+        const n = FL.course.next(l);
+        if (n) return n;
+      }
+      return l;
+    }
+    return null;
+  }
+  function completedThisWeek(d = FL.db.load()) {
+    const since = Date.now() - 7 * 86400000;
+    return Object.values(d.progress).filter(p => p.doneAt && p.doneAt >= since).length;
+  }
+  return { PASS, get, status, touch, slideSeen, saveScore, levelStats, nextLesson, continueTarget, completedThisWeek };
+})();
+
+/* -------------------------------------------------------- Vocabulary (SRS) */
 FL.srs = (function () {
   const DAY = 86400000;
-  function allCards(deckId) {
+  // Decks: "my-words" or a level key ("en-a1"). Level decks contain the words of lessons you have opened.
+  function allCards(deckId, d = FL.db.load()) {
     if (deckId === 'my-words') {
-      return FL.db.load().myWords.map(w => ({ id: w.id, deck: 'my-words', lang: w.lang || 'en', front: w.front, back: w.back, example: w.example || '' }));
+      return d.myWords.map(w => ({ id: w.id, deck: 'my-words', lang: w.lang || 'en', front: w.front, back: w.back, example: w.example || '', source: 'My words' }));
     }
-    const deck = FL.data.decks.find(x => x.id === deckId);
-    if (!deck) return [];
-    return deck.cards.map((c, i) => ({ id: `${deck.id}-${i}`, deck: deck.id, lang: deck.lang, front: c[0], back: c[1], example: c[2] }));
+    const level = FL.course.levelByKey(deckId);
+    if (!level) return [];
+    const out = [];
+    level.lessons.forEach(l => {
+      if (!d.progress[l.id]) return;
+      l.vocab.forEach((v, i) => out.push({ id: `${l.id}:${i}`, deck: deckId, lang: level.lang, front: v[0], back: v[1], example: '', source: `Lesson ${l.n} · ${l.title}` }));
+    });
+    return out;
   }
   function deckStats(deckId, d = FL.db.load(), now = Date.now()) {
-    const cards = allCards(deckId);
+    const cards = allCards(deckId, d);
     let due = 0, fresh = 0, learned = 0;
     cards.forEach(c => {
       const s = d.cards[c.id];
@@ -506,10 +569,13 @@ FL.srs = (function () {
     });
     return { total: cards.length, due, fresh, learned };
   }
+  function totalDue(d = FL.db.load()) {
+    return ['my-words', ...FL.course.allLevels().map(l => l.key)].reduce((s, k) => { const st = deckStats(k, d); return s + st.due; }, 0);
+  }
   function queue(deckId, newLimit = 10) {
     const d = FL.db.load();
     const now = Date.now();
-    const cards = allCards(deckId);
+    const cards = allCards(deckId, d);
     const due = cards.filter(c => d.cards[c.id] && d.cards[c.id].due <= now).sort((a, b) => d.cards[a.id].due - d.cards[b.id].due);
     const fresh = cards.filter(c => !d.cards[c.id]).slice(0, newLimit);
     return due.concat(fresh);
@@ -533,17 +599,18 @@ FL.srs = (function () {
   }
   function previewLabel(state, grade) {
     const n = next(state, grade);
-    if (n.interval === 0) return '<1 min';
+    if (n.interval === 0) return '< 1 min';
     return n.interval === 1 ? '1 day' : n.interval < 31 ? `${n.interval} days` : `${Math.round(n.interval / 30)} mo`;
   }
   function rate(cardId, grade) {
     FL.db.mutate(d => {
       d.cards[cardId] = next(d.cards[cardId], grade);
       d.stats.reviews++;
+      if (d.stats.reviews >= 10) FL.db.tick(d, 'review');
     });
     return FL.db.load().cards[cardId];
   }
-  return { allCards, deckStats, queue, next, rate, previewLabel };
+  return { allCards, deckStats, totalDue, queue, next, rate, previewLabel };
 })();
 
 /* ---------------------------------------------------------- Scheduling */
@@ -587,7 +654,7 @@ FL.schedule = (function () {
   function isStillFree(start, typeId, excludeId) {
     return slots(typeId, { excludeId }).some(s => s.start === start);
   }
-  function book({ start, typeId, courseId, note, rescheduleId }) {
+  function book({ start, typeId, topic, note, rescheduleId }) {
     const u = FL.auth.current();
     if (!u) return { ok: false, error: 'Please sign in to book.' };
     const type = lessonType(typeId);
@@ -603,7 +670,7 @@ FL.schedule = (function () {
       if (old) { old.status = 'cancelled'; old.cancelledAt = Date.now(); old.rescheduledTo = true; }
     }
     const booking = {
-      id: FL.util.uid('bk_'), userId: u.id, type: type.id, courseId: courseId || null, start, end: start + type.minutes * 60000,
+      id: FL.util.uid('bk_'), userId: u.id, type: type.id, topic: topic || 'General English',  start, end: start + type.minutes * 60000,
       note: String(note || '').slice(0, 500), status: 'upcoming', createdAt: Date.now(), credits: rescheduleId ? (list.find(b => b.id === rescheduleId) || {}).credits || 0 : type.credits
     };
     list.push(booking);
@@ -613,11 +680,8 @@ FL.schedule = (function () {
       if (type.once) dd.trialUsed = true;
       if (!rescheduleId) dd.stats.booked++;
       if (cost) dd.transactions.unshift({ id: FL.util.uid('tx_'), at: Date.now(), kind: 'use', credits: -cost, label: `${type.name} \u00b7 ${FL.time.fmtDate(start)}` });
-      const hw = dd.homework.find(h => /trial lesson/i.test(h.text));
-      if (hw && type.id === 'trial') hw.done = true;
+      if (type.id === 'trial') FL.db.tick(dd, 'trial');
     });
-    if (!rescheduleId) FL.game.award(20, { silent: true });
-    else FL.game.checkBadges();
     return { ok: true, booking };
   }
   function cancel(id) {
@@ -646,8 +710,7 @@ FL.cal = (function () {
   function escIcs(s) { return String(s).replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n'); }
   function details(b) {
     const type = FL.schedule.lessonType(b.type);
-    const course = FL.data.courses.find(c => c.id === b.courseId);
-    const title = `${FL.config.brand}: ${type.name}${course ? ' \u2014 ' + course.title : ''}`;
+    const title = `${FL.config.brand}: ${type.name}${b.topic ? ' \u2014 ' + b.topic : ''}`;
     const base = location.href.split('#')[0];
     const desc = `Your ${type.minutes}-minute lesson with ${FL.config.teacher.name}.\n\nJoin the call: ${FL.config.teacher.meetingLink}\nVirtual classroom: ${base}#/classroom/${b.id}` + (b.note ? `\n\nFocus: ${b.note}` : '');
     return { title, desc };
@@ -673,13 +736,10 @@ FL.cal = (function () {
 
 /* --------------------------------------------------------------- Money */
 FL.money = {
-  format(usd, currency) {
-    const c = currency || FL.prefs.get().currency;
-    const rate = FL.config.currency.rates[c] || 1;
-    const value = Math.round(usd * rate);
-    try {
-      return new Intl.NumberFormat('en', { style: 'currency', currency: c, minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(value);
-    } catch (e) { return `${c} ${Math.round(value)}`; }
+  // All prices are in US dollars.
+  format(usd) {
+    const whole = Math.abs(usd - Math.round(usd)) < 0.005;
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: whole ? 0 : 2, maximumFractionDigits: whole ? 0 : 2 }).format(usd);
   }
 };
 
@@ -707,7 +767,6 @@ FL.speech = (function () {
       if (v) u.voice = v;
       u.rate = rate;
       synth.speak(u);
-      FL.db.mutate(d => { d.stats.listens++; d.skills.listening++; });
       return true;
     } catch (e) { return false; }
   }

@@ -69,6 +69,7 @@ FL.ui = (function () {
     square: '<rect x="5" y="5" width="14" height="14" rx="2"/>',
     command: '<path d="M18 3a3 3 0 0 0-3 3v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V6a3 3 0 1 0-3 3h12a3 3 0 0 0 0-6z"/>',
     line: '<path d="M5 19 19 5"/>',
+    expand: '<path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M16 21h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>',
     copy: '<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>'
   };
   function icon(name, cls = '') {
@@ -79,6 +80,13 @@ FL.ui = (function () {
   /* --------------------------------------------------------- Escaping */
   const ESC = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ESC[c]); }
+  // Escape, then allow **bold**, *italic* and ~~strike~~ in lesson content.
+  function fmt(s) {
+    return esc(s)
+      .replace(/~~(.+?)~~/g, '<del>$1</del>')
+      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+      .replace(/(^|[^*])\*(?!\s)(.+?)\*/g, '$1<em>$2</em>');
+  }
 
   /* ----------------------------------------------------------- Toasts */
   function toast(msg, type = 'info', ms = 3500, html = false) {
@@ -87,28 +95,11 @@ FL.ui = (function () {
     const el = document.createElement('div');
     el.className = `toast ${type}`;
     el.setAttribute('role', type === 'error' ? 'alert' : 'status');
-    const ic = { success: 'check-circle', error: 'alert', info: 'info', 'badge-t': 'trophy' }[type] || 'info';
+    const ic = { success: 'check-circle', error: 'alert', info: 'info' }[type] || 'info';
     el.innerHTML = `${icon(ic)}<div>${html ? msg : esc(msg)}</div>`;
     root.appendChild(el);
     while (root.children.length > 4) root.firstElementChild.remove();
     setTimeout(() => { el.classList.add('leaving'); setTimeout(() => el.remove(), 260); }, ms);
-  }
-
-  let xpEl = null, xpTotal = 0, xpTimer = null;
-  function xp(n) {
-    xpTotal += n;
-    if (!xpEl || !xpEl.isConnected) {
-      xpEl = document.createElement('div');
-      xpEl.className = 'xp-pop';
-      xpEl.setAttribute('aria-live', 'polite');
-      document.body.appendChild(xpEl);
-    }
-    xpEl.innerHTML = `${icon('zap')} +${xpTotal} XP`;
-    clearTimeout(xpTimer);
-    xpTimer = setTimeout(() => {
-      if (xpEl) { xpEl.style.transition = 'opacity .3s'; xpEl.style.opacity = '0'; const e = xpEl; setTimeout(() => e.remove(), 320); }
-      xpEl = null; xpTotal = 0;
-    }, 1800);
   }
 
   /* ----------------------------------------------------------- Modals */
@@ -128,7 +119,7 @@ FL.ui = (function () {
         <div class="modal-head"><h3 id="${id}">${esc(title)}</h3>
           ${dismissible ? `<button class="icon-btn" data-close aria-label="Close">${icon('x')}</button>` : ''}</div>
         <div class="modal-body">${body}</div>
-        ${actions.length ? `<div class="modal-foot">${actions.map((a, i) => `<button class="btn ${a.className || 'btn-ghost'}" data-act="${i}">${a.html || esc(a.label)}</button>`).join('')}</div>` : ''}`}
+        ${actions.length ? `<div class="modal-foot">${actions.map((a, i) => `<button class="btn ${a.className || 'btn-quiet'}" data-act="${i}">${a.html || esc(a.label)}</button>`).join('')}</div>` : ''}`}
       </div>`;
     root.appendChild(back);
     openCount++;
@@ -179,7 +170,7 @@ FL.ui = (function () {
       modal({
         title, body: `<p class="mb-0" style="color:var(--text-2)">${body}</p>`,
         actions: [
-          { label: cancelLabel, value: false, className: 'btn-ghost' },
+          { label: cancelLabel, value: false, className: 'btn-quiet' },
           { label: confirmLabel, value: true, className: danger ? 'btn-danger' : 'btn-primary' }
         ],
         onClose: v => resolve(!!v)
@@ -193,50 +184,46 @@ FL.ui = (function () {
     const user = FL.auth.current();
     const items = [
       { label: 'Home', icon: 'home', href: '#/', grp: 'Page' },
-      { label: 'Browse courses', icon: 'book', href: '#/courses', grp: 'Page' },
-      { label: 'Take the placement test', icon: 'target', href: '#/placement', grp: 'Learn' },
-      { label: 'Book a lesson', icon: 'calendar', href: '#/book', grp: 'Lessons' },
-      { label: 'Book a free trial', icon: 'sparkles', href: '#/book?type=trial', grp: 'Lessons' },
-      { label: 'Pricing & packages', icon: 'card', href: '#/pricing', grp: 'Page' },
-      { label: 'Practise flashcards', icon: 'layers', href: '#/practice?tab=cards', grp: 'Practice' },
-      { label: 'Pronunciation coach', icon: 'mic', href: '#/practice?tab=speak', grp: 'Practice' },
-      { label: 'Daily challenge', icon: 'zap', href: '#/practice?tab=daily', grp: 'Practice' },
-      { label: 'Try the virtual classroom', icon: 'video', href: '#/classroom/demo', grp: 'Lessons' },
+      { label: 'All courses', icon: 'book', href: '#/courses', grp: 'Page' },
+      { label: 'Placement test', icon: 'target', href: '#/placement', grp: 'Page' },
+      { label: 'Vocabulary review', icon: 'layers', href: '#/review', grp: 'Page' },
+      { label: 'Speaking practice', icon: 'mic', href: '#/review?tab=speak', grp: 'Page' },
+      { label: 'Book a live lesson', icon: 'calendar', href: '#/book', grp: 'Live lessons' },
+      { label: 'Book a free trial', icon: 'calendar', href: '#/book?type=trial', grp: 'Live lessons' },
+      { label: 'Classroom demo', icon: 'video', href: '#/classroom/demo', grp: 'Live lessons' },
+      { label: 'Pricing', icon: 'card', href: '#/pricing', grp: 'Page' },
       { label: 'About your teacher', icon: 'user', href: '#/about', grp: 'Page' },
       ...(user ? [
-        { label: 'Dashboard', icon: 'grid', href: '#/dashboard', grp: 'Account' },
+        { label: 'My learning', icon: 'grid', href: '#/dashboard', grp: 'Account' },
         { label: 'Settings', icon: 'settings', href: '#/settings', grp: 'Account' },
-        { label: 'Sign out', icon: 'logout', run: () => { FL.auth.logout(); location.hash = '#/'; toast('Signed out. See you soon!', 'success'); }, grp: 'Account' }
+        { label: 'Sign out', icon: 'logout', run: () => { FL.auth.logout(); location.hash = '#/'; toast('Signed out.', 'success'); }, grp: 'Account' }
       ] : [
         { label: 'Sign in', icon: 'user', href: '#/login', grp: 'Account' },
-        { label: 'Create a free account', icon: 'sparkles', href: '#/register', grp: 'Account' }
+        { label: 'Create an account', icon: 'user', href: '#/register', grp: 'Account' }
       ]),
-      { label: 'Toggle dark mode', icon: 'moon', run: () => FL.app.toggleTheme(), grp: 'Action' },
-      ...FL.data.courses.map(c => ({ label: c.title, icon: 'grad', href: `#/course/${c.id}`, grp: c.lang === 'en' ? 'English course' : 'French course' }))
+      { label: 'Switch light / dark theme', icon: 'moon', run: () => FL.app.toggleTheme(), grp: 'Action' },
+      ...FL.course.allLevels().map(l => ({ label: `${FL.course.title(l)} — ${l.name}`, icon: 'grad', href: `#/course/${l.lang}/${l.id}`, grp: 'Course' })),
+      ...FL.course.allLessons().map(l => ({ label: l.title, sub: l.focus, icon: 'book', href: `#/lesson/${l.id}`, grp: `${FL.content[l.lang].name} ${l.levelKey.split('-')[1].toUpperCase()} · Lesson ${l.n}` }))
     ];
-    let active = 0, filtered = items;
-    const m = modal({
+    let active = 0, filtered = items.slice(0, 40);
+    modal({
       bare: true, className: 'palette',
-      body: `<div class="palette-input">${icon('search')}<input type="text" placeholder="Search pages, courses and actions…" aria-label="Search" autocomplete="off" spellcheck="false"><span class="kbd">Esc</span></div>
+      body: `<div class="palette-input">${icon('search')}<input type="text" placeholder="Search lessons, grammar topics and pages…" aria-label="Search" autocomplete="off" spellcheck="false"><span class="kbd">Esc</span></div>
              <ul class="palette-list" role="listbox"></ul>
-             <div class="palette-foot"><span><span class="kbd">↑</span> <span class="kbd">↓</span> navigate</span><span><span class="kbd">Enter</span> open</span></div>`,
+             <div class="palette-foot"><span><span class="kbd">↑</span> <span class="kbd">↓</span> to move</span><span><span class="kbd">Enter</span> to open</span></div>`,
       onMount({ el, close }) {
         const input = el.querySelector('input');
         const list = el.querySelector('.palette-list');
         function render() {
-          list.innerHTML = filtered.length ? filtered.map((it, i) => `<li role="option" data-i="${i}" class="${i === active ? 'active' : ''}" aria-selected="${i === active}">${icon(it.icon)}<span>${esc(it.label)}</span><span class="grp">${esc(it.grp)}</span></li>`).join('')
+          list.innerHTML = filtered.length ? filtered.map((it, i) => `<li role="option" data-i="${i}" class="${i === active ? 'active' : ''}" aria-selected="${i === active}">${icon(it.icon)}<span>${esc(it.label)}${it.sub ? `<span class="tiny muted" style="display:block">${esc(it.sub)}</span>` : ''}</span><span class="grp">${esc(it.grp)}</span></li>`).join('')
             : '<li class="muted" style="cursor:default">No results</li>';
           const a = list.querySelector('.active');
           if (a) a.scrollIntoView({ block: 'nearest' });
         }
-        function run(it) {
-          if (!it) return;
-          close();
-          if (it.run) it.run(); else location.hash = it.href;
-        }
+        function run(it) { if (!it) return; close(); if (it.run) it.run(); else location.hash = it.href; }
         input.addEventListener('input', () => {
-          const q = input.value.trim().toLowerCase();
-          filtered = !q ? items : items.filter(it => (it.label + ' ' + it.grp).toLowerCase().includes(q));
+          const q = FL.util.normalizeText(input.value);
+          filtered = !q ? items.slice(0, 40) : items.filter(it => FL.util.normalizeText(`${it.label} ${it.sub || ''} ${it.grp}`).includes(q)).slice(0, 60);
           active = 0; render();
         });
         input.addEventListener('keydown', e => {
@@ -248,47 +235,47 @@ FL.ui = (function () {
         render();
       }
     });
-    return m;
   }
 
   /* ------------------------------------------------------ Certificate */
-  function certificate({ name, lang, level, date }) {
+  // { name, title: 'English B1 — Intermediate', detail: 'Passed the level test with 85%', level: 'B1', date }
+  function certificate({ name, title, detail, level, date }) {
     const W = 1600, H = 1130;
     const c = document.createElement('canvas');
     c.width = W; c.height = H;
     const x = c.getContext('2d');
-    const g = x.createLinearGradient(0, 0, W, H);
-    g.addColorStop(0, '#312e81'); g.addColorStop(.55, '#4f46e5'); g.addColorStop(1, '#f26b5b');
-    x.fillStyle = g; x.fillRect(0, 0, W, H);
-    x.fillStyle = '#fffdf9';
-    roundRect(x, 40, 40, W - 80, H - 80, 28); x.fill();
-    x.strokeStyle = '#e6e1d9'; x.lineWidth = 2; roundRect(x, 70, 70, W - 140, H - 140, 18); x.stroke();
-    x.textAlign = 'center'; x.fillStyle = '#4f46e5';
-    x.font = '700 30px Inter, Arial, sans-serif';
-    x.fillText(FL.config.brand.toUpperCase() + '  ·  LANGUAGE LEVEL CERTIFICATE', W / 2, 190);
-    x.fillStyle = '#6d6a75'; x.font = '400 30px Inter, Arial, sans-serif';
-    x.fillText('This certifies that', W / 2, 300);
-    x.fillStyle = '#1b1a22'; x.font = '700 92px Fraunces, Georgia, serif';
-    x.fillText(fit(x, name, W - 300), W / 2, 410);
-    x.fillStyle = '#6d6a75'; x.font = '400 30px Inter, Arial, sans-serif';
-    x.fillText(`completed the ${FL.config.brand} adaptive placement test in ${lang === 'fr' ? 'French' : 'English'} and was assessed at`, W / 2, 490);
-    x.beginPath(); x.arc(W / 2, 640, 110, 0, Math.PI * 2);
-    const rg = x.createLinearGradient(W / 2 - 110, 530, W / 2 + 110, 750); rg.addColorStop(0, '#4f46e5'); rg.addColorStop(1, '#f26b5b');
-    x.fillStyle = rg; x.fill();
-    x.fillStyle = '#fff'; x.font = '700 96px Fraunces, Georgia, serif'; x.fillText(level, W / 2, 672);
-    const info = FL.data.LEVEL_INFO[level];
-    x.fillStyle = '#1b1a22'; x.font = '600 36px Inter, Arial, sans-serif';
-    x.fillText(`CEFR level ${level}${info ? ' — ' + info.name : ''}`, W / 2, 815);
-    x.font = '400 26px Inter, Arial, sans-serif'; x.fillStyle = '#6d6a75';
+    const NAVY = '#1f3a68', INK = '#1d1d1b', MUTED = '#6b6a64', PAPER = '#fffdf8';
+    x.fillStyle = PAPER; x.fillRect(0, 0, W, H);
+    x.strokeStyle = NAVY; x.lineWidth = 6; x.strokeRect(50, 50, W - 100, H - 100);
+    x.lineWidth = 1.5; x.strokeRect(70, 70, W - 140, H - 140);
+    x.textAlign = 'center';
+    x.fillStyle = NAVY; x.font = '700 26px "Source Sans 3", Arial, sans-serif';
+    x.fillText(spaced(FL.config.brand.toUpperCase()), W / 2, 175);
+    x.fillStyle = INK; x.font = '600 76px "Source Serif 4", Georgia, serif';
+    x.fillText('Certificate of Achievement', W / 2, 285);
+    x.fillStyle = MUTED; x.font = '400 30px "Source Sans 3", Arial, sans-serif';
+    x.fillText('This is to certify that', W / 2, 380);
+    x.fillStyle = INK; x.font = 'italic 600 84px "Source Serif 4", Georgia, serif';
+    x.fillText(fit(x, name, W - 360), W / 2, 495);
+    x.strokeStyle = '#cfcdc5'; x.lineWidth = 1.5; x.beginPath(); x.moveTo(420, 530); x.lineTo(W - 420, 530); x.stroke();
+    x.fillStyle = MUTED; x.font = '400 30px "Source Sans 3", Arial, sans-serif';
+    x.fillText(detail, W / 2, 600);
+    x.fillStyle = NAVY; x.font = '600 46px "Source Serif 4", Georgia, serif';
+    x.fillText(title, W / 2, 680);
+    // seal
+    x.beginPath(); x.arc(W / 2, 830, 82, 0, Math.PI * 2); x.fillStyle = NAVY; x.fill();
+    x.beginPath(); x.arc(W / 2, 830, 70, 0, Math.PI * 2); x.strokeStyle = 'rgba(255,255,255,.6)'; x.lineWidth = 2; x.stroke();
+    x.fillStyle = '#fff'; x.font = '700 58px "Source Serif 4", Georgia, serif'; x.fillText(level, W / 2, 852);
+    x.fillStyle = INK; x.font = '400 26px "Source Sans 3", Arial, sans-serif';
     x.fillText(date, 420, 960); x.fillText(FL.config.teacher.name, W - 420, 960);
-    x.strokeStyle = '#d4cec4'; x.beginPath(); x.moveTo(270, 920); x.lineTo(570, 920); x.moveTo(W - 570, 920); x.lineTo(W - 270, 920); x.stroke();
-    x.font = '600 20px Inter, Arial, sans-serif'; x.fillStyle = '#9a96a3';
+    x.strokeStyle = '#cfcdc5'; x.beginPath(); x.moveTo(270, 925); x.lineTo(570, 925); x.moveTo(W - 570, 925); x.lineTo(W - 270, 925); x.stroke();
+    x.fillStyle = MUTED; x.font = '700 18px "Source Sans 3", Arial, sans-serif';
     x.fillText('DATE', 420, 995); x.fillText('TEACHER', W - 420, 995);
-    x.font = '400 18px Inter, Arial, sans-serif';
-    x.fillText('Indicative result from an online adaptive test — not an official exam certificate.', W / 2, 1040);
+    x.font = '400 17px "Source Sans 3", Arial, sans-serif';
+    x.fillText('Awarded by an online course — not an official exam certificate.', W / 2, 1045);
     return c.toDataURL('image/png');
+    function spaced(t) { return t.split('').join(' '); }
     function fit(ctx, text, max) { let t = text; while (ctx.measureText(t).width > max && t.length > 3) t = t.slice(0, -2); return t === text ? t : t + '…'; }
-    function roundRect(ctx, x0, y0, w, h, r) { ctx.beginPath(); ctx.moveTo(x0 + r, y0); ctx.arcTo(x0 + w, y0, x0 + w, y0 + h, r); ctx.arcTo(x0 + w, y0 + h, x0, y0 + h, r); ctx.arcTo(x0, y0 + h, x0, y0, r); ctx.arcTo(x0, y0, x0 + w, y0, r); ctx.closePath(); }
   }
 
   function download(filename, content, mime = 'text/plain') {
@@ -298,27 +285,6 @@ FL.ui = (function () {
     a.download = filename;
     document.body.appendChild(a); a.click(); a.remove();
     if (a.href.startsWith('blob:')) setTimeout(() => URL.revokeObjectURL(a.href), 2000);
-  }
-
-  /* ----------------------------------------------------------- Charts */
-  function ring(pct, label, sub) {
-    const r = 52, c = 2 * Math.PI * r;
-    const off = c * (1 - FL.util.clamp(pct, 0, 100) / 100);
-    return `<div class="ring" role="img" aria-label="${esc(label)} ${esc(sub || '')}">
-      <svg viewBox="0 0 120 120"><defs><linearGradient id="ringGrad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="var(--primary)"/><stop offset="1" stop-color="var(--accent)"/></linearGradient></defs>
-      <circle class="track" cx="60" cy="60" r="${r}"/><circle class="val" cx="60" cy="60" r="${r}" stroke-dasharray="${c.toFixed(1)}" stroke-dashoffset="${off.toFixed(1)}"/></svg>
-      <div class="label"><strong>${esc(label)}</strong><span>${esc(sub || '')}</span></div></div>`;
-  }
-  function radar(values, labels, size = 260) {
-    const cx = size / 2, cy = size / 2, R = size / 2 - 40, n = values.length;
-    const pt = (i, v) => { const a = -Math.PI / 2 + i * 2 * Math.PI / n; return [cx + Math.cos(a) * R * v, cy + Math.sin(a) * R * v]; };
-    let grid = '';
-    [0.25, 0.5, 0.75, 1].forEach(l => { grid += `<polygon class="grid-poly" points="${values.map((_, i) => pt(i, l).join(',')).join(' ')}"/>`; });
-    const axes = values.map((_, i) => { const [x, y] = pt(i, 1); return `<line class="axis" x1="${cx}" y1="${cy}" x2="${x}" y2="${y}"/>`; }).join('');
-    const area = values.map((v, i) => pt(i, Math.max(0.04, v / 100)).join(',')).join(' ');
-    const dots = values.map((v, i) => { const [x, y] = pt(i, Math.max(0.04, v / 100)); return `<circle class="dot" cx="${x}" cy="${y}" r="3.5"/>`; }).join('');
-    const txt = labels.map((l, i) => { const [x, y] = pt(i, 1.22); return `<text x="${x}" y="${y}" text-anchor="middle" dominant-baseline="middle">${esc(l)}</text>`; }).join('');
-    return `<svg class="radar" viewBox="0 0 ${size} ${size}" role="img" aria-label="Skills chart: ${labels.map((l, i) => `${l} ${values[i]}%`).join(', ')}">${grid}${axes}<polygon class="area" points="${area}"/>${dots}${txt}</svg>`;
   }
 
   /* ----------------------------------------------------- Scroll reveal */
@@ -336,5 +302,5 @@ FL.ui = (function () {
     else { btn.disabled = false; if (btn.dataset.label) btn.innerHTML = btn.dataset.label; }
   }
 
-  return { icon, esc, toast, xp, modal, confirm, closeAll, palette, certificate, download, ring, radar, reveal, setLoading };
+  return { icon, esc, fmt, toast, modal, confirm, closeAll, palette, certificate, download, reveal, setLoading };
 })();

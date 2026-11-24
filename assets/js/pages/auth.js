@@ -1,5 +1,5 @@
 /* ==========================================================================
-   Fluentia — Sign in, Register, one-click demo account
+   Fluentia — sign in, create account and demo student
    ========================================================================== */
 window.FL = window.FL || {};
 FL.pages = FL.pages || {};
@@ -9,14 +9,14 @@ FL.authView = (function () {
   function side(title, text) {
     return `<aside class="auth-side">
       <h2>${title}</h2><p style="font-size:1.08rem">${text}</p>
-      <ul class="check-list mt-2">
-        <li>${icon('check-circle')}<span>Free 25-minute trial lesson</span></li>
-        <li>${icon('check-circle')}<span>Adaptive placement test & certificate</span></li>
-        <li>${icon('check-circle')}<span>Flashcards, pronunciation coach & daily challenges</span></li>
-        <li>${icon('check-circle')}<span>Personal dashboard to track your progress</span></li>
+      <ul class="list-check mt-2">
+        <li>${icon('check')}<span>${FL.course.allLessons().length} free lessons in English and French</span></li>
+        <li>${icon('check')}<span>Progress, grades and certificates saved to your account</span></li>
+        <li>${icon('check')}<span>Vocabulary review that adapts to you</span></li>
+        <li>${icon('check')}<span>Live 1-on-1 lessons when you want them</span></li>
       </ul>
-      <div class="row mt-4" style="gap:14px"><span class="avatar" style="width:52px;height:52px"><img src="${esc(FL.config.teacher.photo)}" alt=""></span>
-        <div><strong>${esc(FL.config.teacher.name)}</strong><div class="small" style="opacity:.8">${esc(FL.config.teacher.title)}</div></div></div>
+      <div class="row mt-4"><span class="avatar lg"><img src="${esc(FL.config.teacher.photo)}" alt=""></span>
+        <div><strong style="color:#fff">${esc(FL.config.teacher.name)}</strong><div class="small" style="color:#c8d4ea">${esc(FL.config.teacher.title)}</div></div></div>
     </aside>`;
   }
   function nextPath(query) {
@@ -53,16 +53,16 @@ FL.authView = (function () {
   return { side, nextPath, setErrors, bindReveal, pwField };
 })();
 
-/* ---------------------------------------------------------------- Login */
+/* ------------------------------------------------------------------ Sign in */
 FL.pages.login = {
   title: 'Sign in',
   guestOnly: true,
   render(params, query) {
-    const { icon, esc } = FL.ui;
+    const { icon } = FL.ui;
     return `<div class="auth-wrap">
-      ${FL.authView.side('Welcome back 👋', 'Pick up right where you left off — your streak is waiting.')}
+      ${FL.authView.side('Welcome back', 'Pick up exactly where you left off.')}
       <div class="auth-main"><div class="auth-card">
-        <h1>Sign in</h1>
+        <h1 style="font-size:2rem">Sign in</h1>
         <p class="muted">New here? <a href="#/register${query.next ? '?next=' + encodeURIComponent(query.next) : ''}">Create a free account</a></p>
         <form id="login-form" novalidate>
           <div class="notice warn mb-2" data-err-box hidden>${icon('alert')}<div data-err="form"></div></div>
@@ -70,9 +70,9 @@ FL.pages.login = {
           ${FL.authView.pwField('password', 'Password', 'current-password')}
           <button class="btn btn-primary btn-block btn-lg" type="submit">Sign in</button>
         </form>
-        <div class="row mt-3 mb-2" style="gap:12px"><hr class="divider" style="flex:1;margin:0"><span class="tiny muted">OR</span><hr class="divider" style="flex:1;margin:0"></div>
-        <button class="btn btn-block btn-lg" data-demo>${icon('sparkles')} Explore with a demo student account</button>
-        <p class="tiny muted center mt-2">The demo account comes pre-filled with lessons, progress and flashcards.</p>
+        <div class="or">or</div>
+        <button type="button" class="btn btn-block btn-lg" data-demo>Explore with a demo student account</button>
+        <p class="tiny muted center mt-1">The demo account already has lessons, grades and live bookings.</p>
       </div></div>
     </div>`;
   },
@@ -93,42 +93,41 @@ FL.pages.login = {
         return;
       }
       FL.db.processCompletedLessons();
-      FL.ui.toast(`Welcome back, ${FL.util.firstName(res.user.name)}!`, 'success');
+      FL.ui.toast(`Welcome back, ${FL.util.firstName(res.user.name)}.`, 'success');
       FL.router.go(FL.authView.nextPath(query));
     });
     root.querySelector('[data-demo]').addEventListener('click', async e => {
-      FL.ui.setLoading(e.currentTarget, true, 'Preparing demo…');
+      FL.ui.setLoading(e.currentTarget, true, 'Preparing the demo…');
       await FL.demo.signIn();
       FL.router.go('/dashboard');
     });
   }
 };
 
-/* ------------------------------------------------------------- Register */
+/* ----------------------------------------------------------- Create account */
 FL.pages.register = {
-  title: 'Create your account',
+  title: 'Create an account',
   guestOnly: true,
   render(params, query) {
-    const { icon } = FL.ui;
     return `<div class="auth-wrap">
-      ${FL.authView.side('Start speaking with confidence', 'Create your free account to book lessons, save your level and track every bit of progress.')}
+      ${FL.authView.side('Learn at your own pace', 'A free account saves your progress, grades and vocabulary on every lesson.')}
       <div class="auth-main"><div class="auth-card">
-        <h1>Create your account</h1>
-        <p class="muted">Already have one? <a href="#/login${query.next ? '?next=' + encodeURIComponent(query.next) : ''}">Sign in</a></p>
+        <h1 style="font-size:2rem">Create your account</h1>
+        <p class="muted">Already registered? <a href="#/login${query.next ? '?next=' + encodeURIComponent(query.next) : ''}">Sign in</a></p>
         <form id="reg-form" novalidate>
           <div class="field"><label for="f-name">Full name</label><input id="f-name" name="name" class="input" autocomplete="name" maxlength="60" required><span class="field-error" data-err="name"></span></div>
           <div class="field"><label for="f-email">Email</label><input id="f-email" name="email" type="email" class="input" autocomplete="email" required><span class="field-error" data-err="email"></span></div>
           ${FL.authView.pwField('password', 'Password', 'new-password')}
           <div class="strength" aria-hidden="true" style="margin:-8px 0 6px"><span id="pw-bar"></span></div>
-          <div class="field-hint mb-2" id="pw-hint">Use 8+ characters with a mix of letters, numbers and symbols.</div>
+          <div class="field-hint mb-2" id="pw-hint">At least 8 characters.</div>
           <div class="field"><span class="label">I want to learn</span>
             <div class="seg" role="radiogroup" aria-label="Language to learn">
               <button type="button" role="radio" data-lang="en" aria-pressed="true" aria-checked="true">English</button>
               <button type="button" role="radio" data-lang="fr" aria-pressed="false" aria-checked="false">French</button>
             </div></div>
-          <label class="checkbox mb-2"><input type="checkbox" name="terms"><span>I agree that my data is stored in this browser to run the platform (demo — no data leaves your device).</span></label>
-          <span class="field-error" data-err="terms" style="display:block;margin:-8px 0 12px"></span>
-          <button class="btn btn-primary btn-block btn-lg" type="submit">${icon('sparkles')} Create free account</button>
+          <label class="checkbox mb-1"><input type="checkbox" name="terms"><span>I understand my progress is stored in this browser (portfolio version — no data leaves your device).</span></label>
+          <span class="field-error" data-err="terms" style="display:block;margin-bottom:12px"></span>
+          <button class="btn btn-primary btn-block btn-lg" type="submit">Create account</button>
         </form>
       </div></div>
     </div>`;
@@ -137,15 +136,13 @@ FL.pages.register = {
     const form = root.querySelector('#reg-form');
     let lang = 'en';
     FL.authView.bindReveal(form);
-    const bar = root.querySelector('#pw-bar');
-    const hint = root.querySelector('#pw-hint');
+    const bar = root.querySelector('#pw-bar'), hint = root.querySelector('#pw-hint');
     form.password.addEventListener('input', () => {
       const s = FL.auth.passwordScore(form.password.value);
-      const colors = ['var(--danger)', 'var(--danger)', 'var(--warning)', 'var(--success)', 'var(--success)'];
-      const labels = ['Too weak', 'Weak', 'Fair', 'Strong', 'Very strong'];
+      const colors = ['var(--bad)', 'var(--bad)', 'var(--warn)', 'var(--good)', 'var(--good)'];
       bar.style.width = form.password.value ? `${(s + 1) * 20}%` : '0';
       bar.style.background = colors[s];
-      hint.textContent = form.password.value ? `Password strength: ${labels[s]}` : 'Use 8+ characters with a mix of letters, numbers and symbols.';
+      hint.textContent = form.password.value ? `Password strength: ${['too weak', 'weak', 'fair', 'strong', 'very strong'][s]}` : 'At least 8 characters.';
     });
     form.querySelectorAll('[data-lang]').forEach(b => b.addEventListener('click', () => {
       lang = b.dataset.lang;
@@ -154,44 +151,21 @@ FL.pages.register = {
     form.addEventListener('submit', async e => {
       e.preventDefault();
       const errors = FL.auth.validate({ name: form.name.value, email: form.email.value, password: form.password.value }, 'register');
-      if (!form.terms.checked) errors.terms = 'Please accept to continue.';
+      if (!form.terms.checked) errors.terms = 'Please confirm to continue.';
       if (Object.keys(errors).length) { FL.authView.setErrors(form, errors); return; }
       const btn = form.querySelector('[type="submit"]');
-      FL.ui.setLoading(btn, true, 'Creating account…');
+      FL.ui.setLoading(btn, true, 'Creating your account…');
       const res = await FL.auth.register({ name: form.name.value, email: form.email.value, password: form.password.value });
       FL.ui.setLoading(btn, false);
       if (!res.ok) { FL.authView.setErrors(form, res.errors); return; }
-      FL.db.mutate(d => { d.profile.targetLang = lang; });
-      FL.ui.toast(`Welcome to ${FL.config.brand}, ${FL.util.firstName(res.user.name)}! 🎉`, 'success');
+      FL.db.mutate(d => { d.profile.lang = lang; });
+      FL.ui.toast(`Welcome, ${FL.util.firstName(res.user.name)}. Your account is ready.`, 'success');
       FL.router.go(FL.authView.nextPath(query));
     });
   }
 };
 
-/* ---------------------------------------------------------- Learning plan */
-FL.plan = {
-  generate({ goal = 'conversation', hoursPerWeek = 2, targetLang = 'en' }) {
-    const lessonsPerWeek = hoursPerWeek <= 1 ? 1 : hoursPerWeek <= 3 ? 2 : 3;
-    const lessonDays = { 1: [3], 2: [2, 4], 3: [1, 3, 5] }[lessonsPerWeek];
-    const extra = {
-      conversation: 'Shadowing · 10 min', exam: 'Timed practice · 20 min', business: 'Email writing · 15 min',
-      study: 'Reading · 15 min', travel: 'Phrase drill · 10 min', kids: 'Story time · 10 min'
-    }[goal] || 'Reading · 15 min';
-    const days = [1, 2, 3, 4, 5, 6, 0].map(wd => {
-      const tasks = [];
-      if (lessonDays.includes(wd)) tasks.push({ k: 'lesson', t: 'Live lesson' });
-      tasks.push({ k: 'cards', t: 'Flashcards · 10 min' });
-      if (!lessonDays.includes(wd) && wd !== 0) tasks.push({ k: 'speak', t: 'Pronunciation · 5 min' });
-      if (wd === 6) tasks.push({ k: 'goal', t: extra });
-      if (wd === 0) tasks.push({ k: 'review', t: 'Weekly review' });
-      tasks.push({ k: 'daily', t: 'Daily challenge' });
-      return { wd, tasks };
-    });
-    return { lessonsPerWeek, days, weeklyXp: 150 + hoursPerWeek * 75, lang: targetLang, goal, createdAt: Date.now() };
-  }
-};
-
-/* ------------------------------------------------------------ Demo data */
+/* ------------------------------------------------------------ Demo student */
 FL.demo = {
   EMAIL: 'demo.student@fluentia.app',
   PASSWORD: 'demo-fluentia-2026',
@@ -201,67 +175,68 @@ FL.demo = {
       res = await FL.auth.register({ name: 'Aisyah Rahman', email: this.EMAIL, password: this.PASSWORD });
       if (res.ok) this.seed(res.user);
     }
-    if (res.ok) FL.ui.toast('You’re exploring as a demo student. Everything works — try it all!', 'success', 4500);
+    if (res.ok) FL.ui.toast('You are using the demo student account. Everything works — explore freely.', 'success', 4500);
     return res;
   },
   seed(user) {
     const DAY = 86400000, now = Date.now();
-    const rand = FL.util.rng(42);
-    const tz = FL.time.browserTz();
+    const rand = FL.util.rng(7);
+    const tz = FL.config.teacher.timezone;
+    const lessons = [];
+    // Past live lessons
     const all = FL.db.allBookings();
-    // Past, completed lessons
-    const past = [];
-    [26, 19, 12, 5].forEach((ago, i) => {
-      const p = FL.time.parts(now - ago * DAY, FL.config.teacher.timezone);
-      const start = FL.time.zonedToUtc(p.y, p.m, p.d, i % 2 ? 18 : 10, 0, FL.config.teacher.timezone);
-      past.push({ id: FL.util.uid('bk_'), userId: user.id, type: i === 0 ? 'trial' : 'standard', courseId: 'en-ielts', start, end: start + (i === 0 ? 25 : 50) * 60000, note: '', status: 'upcoming', createdAt: start - 3 * DAY, credits: i === 0 ? 0 : 1 });
+    [24, 17, 10].forEach((ago, i) => {
+      const p = FL.time.parts(now - ago * DAY, tz);
+      const start = FL.time.zonedToUtc(p.y, p.m, p.d, i % 2 ? 18 : 10, 0, tz);
+      const b = { id: FL.util.uid('bk_'), userId: user.id, type: i === 0 ? 'trial' : 'standard', topic: 'IELTS preparation', start, end: start + (i === 0 ? 25 : 50) * 60000, note: '', status: 'upcoming', createdAt: start - 3 * DAY, credits: i === 0 ? 0 : 1 };
+      all.push(b); lessons.push(b);
     });
-    all.push(...past);
     FL.db.saveBookings(all);
-    // Upcoming lessons on real free slots
     const slots = FL.schedule.slots('standard');
-    const picks = [slots[0], slots.find(s => s.start > (slots[0] ? slots[0].start : 0) + 2 * DAY)].filter(Boolean);
+    const first = slots[0];
+    const second = first ? slots.find(s => s.start > first.start + 2 * DAY) : null;
     const list = FL.db.allBookings();
-    picks.forEach((s, i) => list.push({ id: FL.util.uid('bk_'), userId: user.id, type: 'standard', courseId: 'en-ielts', start: s.start, end: s.end, note: i === 0 ? 'Speaking Part 2 practice, please!' : '', status: 'upcoming', createdAt: now - DAY, credits: 1 }));
+    [first, second].filter(Boolean).forEach((s, i) => list.push({ id: FL.util.uid('bk_'), userId: user.id, type: 'standard', topic: i ? 'Conversation practice' : 'IELTS preparation', start: s.start, end: s.end, note: i ? '' : 'Speaking Part 2, please.', status: 'upcoming', createdAt: now - DAY, credits: 1 }));
     FL.db.saveBookings(list);
 
     FL.db.mutate(d => {
       d.registered = true;
-      d.profile = Object.assign(d.profile, { targetLang: 'en', goal: 'exam', level: { en: 'B1', fr: 'A2' }, onboarded: true, hoursPerWeek: 2, activeCourse: 'en-ielts', timezone: tz, weeklyGoal: 300 });
-      d.profile.plan = FL.plan.generate({ goal: 'exam', hoursPerWeek: 2, targetLang: 'en' });
-      d.credits = 5;
+      d.profile = Object.assign(d.profile, { lang: 'en', levels: { en: 'A2', fr: 'A1' }, goal: 'exam', weeklyLessons: 3, onboarded: true, timezone: FL.time.browserTz() });
+      d.credits = 6;
       d.trialUsed = true;
-      d.placement = { en: { level: 'B1', correct: 7, total: 10, date: now - 27 * DAY }, fr: { level: 'A2', correct: 5, total: 10, date: now - 9 * DAY } };
-      let xp = 0;
+      d.placement = { en: { level: 'A2', correct: 6, total: 10, date: now - 30 * DAY }, fr: { level: 'A1', correct: 4, total: 10, date: now - 12 * DAY } };
+      const done = (id, best, agoDays, attempts = 1) => { const l = FL.course.lesson(id); d.progress[id] = { seen: l.slides.length + 3, slidesDone: true, best, attempts, completed: best >= 60, started: now - (agoDays + 1) * DAY, last: now - agoDays * DAY, doneAt: best >= 60 ? now - agoDays * DAY : undefined, lastScore: best }; };
+      done('en-a1-1', 100, 28); done('en-a1-2', 89, 26); done('en-a1-3', 78, 23, 2); done('en-a1-4', 89, 21); done('en-a1-5', 100, 19);
+      done('en-a2-1', 89, 9); done('en-a2-2', 67, 6, 2); done('en-a2-3', 78, 2);
+      d.progress['en-a2-4'] = { seen: 4, slidesDone: false, best: null, attempts: 0, completed: false, started: now - DAY, last: now - 3 * 3600000 };
+      done('fr-a1-1', 89, 11); done('fr-a1-2', 56, 4);
+      d.last = 'en-a2-4';
+      d.levelTests['en-a1'] = { best: 87, attempts: 1, passed: true, last: 87, date: now - 18 * DAY };
       for (let i = 1; i < 84; i++) {
         const k = FL.time.addDaysKey(FL.time.localKey(), -i);
-        const r = rand();
-        const active = i < 7 ? true : r > 0.38;
-        if (active) { const v = Math.round(15 + rand() * 90); d.activity[k] = v; xp += v; }
+        if (i < 6 || rand() > 0.42) d.activity[k] = Math.round(2 + rand() * 18);
       }
-      d.xp = xp + 100 * past.length;
-      d.skills = { speaking: 64, listening: 41, vocabulary: 120, grammar: 38, writing: 22 };
-      d.stats = { reviews: 132, pronAttempts: 21, bestPron: 88, daily: 9, booked: 6, completed: past.length, listens: 47 };
-      d.processed = past.map(b => b.id);
-      const deck = FL.srs.allCards('en-business');
-      deck.slice(0, 8).forEach((c, i) => { d.cards[c.id] = { ef: 2.4, interval: i < 3 ? 1 : 6, reps: 2, due: now + (i < 3 ? -DAY : (i - 2) * DAY) }; });
+      FL.course.lesson('en-a1-1').vocab.forEach((v, i) => { d.cards[`en-a1-1:${i}`] = { ef: 2.5, interval: 12, reps: 3, due: now + 5 * DAY }; });
+      FL.course.lesson('en-a2-1').vocab.forEach((v, i) => { d.cards[`en-a2-1:${i}`] = { ef: 2.3, interval: 1, reps: 1, due: i < 5 ? now - DAY : now + DAY }; });
+      d.stats = { reviews: 86, pronAttempts: 14, bestPron: 88, booked: 5, completed: lessons.length };
+      d.processed = lessons.map(b => b.id);
       d.myWords = [
-        { id: FL.util.uid('w_'), lang: 'en', front: 'to elaborate on', back: 'to explain in more detail', example: 'Could you elaborate on that point?', at: now - 12 * DAY },
-        { id: FL.util.uid('w_'), lang: 'en', front: 'a significant increase', back: 'a large rise (IELTS Task 1)', example: 'There was a significant increase in sales.', at: now - 12 * DAY },
-        { id: FL.util.uid('w_'), lang: 'en', front: 'on the other hand', back: 'introduces a contrasting point', example: 'On the other hand, cities are expensive.', at: now - 5 * DAY }
+        { id: FL.util.uid('w_'), lang: 'en', front: 'to elaborate on', back: 'to explain in more detail', at: now - 12 * DAY },
+        { id: FL.util.uid('w_'), lang: 'en', front: 'a significant increase', back: 'a large rise (IELTS Task 1)', at: now - 9 * DAY }
       ];
-      d.notes[past[3].id] = 'Speaking Part 2 — "Describe a place you visited".\n\n✔ Good use of past tenses and linking words.\n✖ Watch: "I have went" → "I went".\n\nUseful phrases: "What struck me most was…", "It was well worth the trip."\n\nHomework: record a 2-minute answer about a memorable meal.';
+      d.notes[lessons[2].id] = 'Speaking Part 2 — "Describe a place you visited".\n\nGood: past tenses and linking words.\nWatch: "I have went" → "I went".\n\nUseful: "What struck me most was…", "It was well worth the trip."\n\nHomework: record a 2-minute answer about a memorable meal.';
+      d.notes['lesson:en-a2-1'] = 'Irregular verbs to learn: buy-bought, take-took, meet-met.';
       d.homework = [
-        { id: FL.util.uid('hw_'), text: 'Record a 2-minute Part 2 answer: "Describe a memorable meal"', done: false, link: '#/practice?tab=speak' },
-        { id: FL.util.uid('hw_'), text: 'Write a Task 1 paragraph describing the sales graph from the lesson', done: false, link: `#/classroom/${past[3].id}` },
-        { id: FL.util.uid('hw_'), text: 'Review "Business English essentials" flashcards', done: true, link: '#/practice?tab=cards' },
-        { id: FL.util.uid('hw_'), text: 'Take the placement test to find your CEFR level', done: true, link: '#/placement' }
+        { id: FL.util.uid('hw_'), text: 'Finish "Have you ever…?" (English A2, lesson 4)', done: false, link: '#/lesson/en-a2-4' },
+        { id: FL.util.uid('hw_'), text: 'Record a 2-minute answer: "Describe a memorable meal"', done: false, link: '#/review?tab=speak' },
+        { id: FL.util.uid('hw_'), text: 'Retry the practice of French A1, lesson 2', done: false, link: '#/lesson/fr-a1-2?step=practice' },
+        { id: FL.util.uid('hw_'), text: 'Take the placement test to find your level', done: true, link: '#/placement', auto: 'placement' },
+        { id: FL.util.uid('hw_'), text: 'Complete your first lesson', done: true, link: '#/courses', auto: 'lesson' }
       ];
       d.transactions = [
-        { id: FL.util.uid('tx_'), at: now - 20 * DAY, kind: 'buy', credits: 10, label: '10-lesson pack' },
-        { id: FL.util.uid('tx_'), at: now - 19 * DAY, kind: 'use', credits: -1, label: 'Standard lesson' }
+        { id: FL.util.uid('tx_'), at: now - 20 * DAY, kind: 'buy', credits: 10, label: '10-lesson pack · $153' },
+        { id: FL.util.uid('tx_'), at: now - 17 * DAY, kind: 'use', credits: -1, label: 'Live lesson' }
       ];
     }, user.id);
-    FL.game.checkBadges(user.id, true);
   }
 };
